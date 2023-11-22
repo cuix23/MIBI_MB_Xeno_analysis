@@ -1,0 +1,284 @@
+---
+title: "MB_Xeno_Exploration"
+author: "Xinyue_Cui"
+date: "2023-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Libraries
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(formattable)
+library(RColorBrewer)
+library(tidyverse)
+library(cytomapper)
+library(magrittr)
+library(SpatialExperiment)
+library(ggpubr)
+```
+
+# The dataset MB_ Xeno
+```{r}
+MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MB_Xeno_analysis/Data/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+head(MB_Xeno)
+colnames(MB_Xeno)
+# Now, I want to create a new column called tissue_id, which is the unique combination of experience_id and mouse_id. We get 9 unique tissue in total.
+MB_Xeno$tissue_id<- paste(MB_Xeno$mouse_id, MB_Xeno$experiment_id, sep="_")
+dim(MB_Xeno)
+MB_Xeno$tissue_id <- as.factor(as.character(MB_Xeno$tissue_id))
+table(MB_Xeno$tissue_id)
+```
+generate contingency tables to examine the relationship between the 'tissue_id' and other variables within the 'MB_Xeno' dataset
+```{r}
+num_unique_combinations <- MB_Xeno %>%
+  distinct(tissue_id,Run,BlockID_2) %>%
+  nrow()
+num_unique_combinations
+table(MB_Xeno$tissue_id)
+table(MB_Xeno$tissue_id,MB_Xeno$treatment_id)
+table(MB_Xeno$Run, MB_Xeno$tissue_id)
+table(MB_Xeno$BlockID_2, MB_Xeno$tissue_id)
+table(MB_Xeno$BlockID_1, MB_Xeno$tissue_id)
+table(MB_Xeno$BlockID_1, MB_Xeno$BlockID_2)
+```
+
+# Cell count of each tissue
+```{r}
+table(MB_Xeno$tissue_id, MB_Xeno$FOV)
+# Cell numbers in each tissue
+p_tissue <- ggplot(MB_Xeno, aes(tissue_id)) + 
+  geom_bar(fill = "skyblue") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1,size = 8),
+        panel.background = element_rect(fill = "white"))+
+  labs(title ="Number of cells in each tissue",x = "tissue_id",y = "Cells Count")
+p_tissue 
+```
+```{r}
+
+library(ggplot2)
+library(ggmosaic)
+
+data <- data.frame(
+  Category1 = c("A", "A", "B", "B"),
+  Category2 = c("X", "Y", "X", "Y"),
+  Count = c(10, 20, 30, 40)
+)
+
+MB_Xeno$FOV <- as.factor(as.character(MB_Xeno$FOV))
+# Create the mosaic plot
+ggplot(MB_Xeno, aes(x=tissue_id, fill=FOV)) + 
+  geom_bar() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1,size = 8),
+        panel.background = element_rect(fill = "white"))+
+  labs(title ="Number of cells in each tissue",x = "tissue_id",y = "Cells Count")
+
+ggplot(MB_Xeno, aes(x=tissue_id, fill=FOV)) + 
+  geom_bar() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1, size = 8),
+        panel.background = element_rect(fill = "white"),
+        legend.text = element_text(size = 7), # Adjust the size of the legend text
+        legend.key.size = unit(0.4, 'cm')) + # Adjust the size of the legend keys
+  labs(title ="Number of cells in each tissue",
+       x = "tissue_id",
+       y = "Cells Count")
+
+
+```
+
+
+```{r}
+
+table(MB_Xeno$tissue_id)
+# Cell numbers in each tissue
+p_tissue <- ggplot(MB_Xeno, aes(y=tissue_id)) + 
+  geom_bar(fill = "skyblue") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(hjust = 1, size = 12),
+        axis.text.y = element_text(size = 14),  # Adjust the size here for y-axis text
+        panel.background = element_rect(fill = "white")) +
+  labs(title ="Number of cells in each tissue", x = "Cells Count", y = "tissue_id")
+
+p_tissue  
+```
+
+
+# Tissue 
+```{r}
+# cell numbers of each cluster_id
+Cluster_count_all <- (
+  dplyr:: count(MB_Xeno, cluster_id) 
+  |> dplyr::rename(count = n) 
+  |> dplyr::mutate(cluster_id = forcats::fct_reorder(cluster_id, count))
+  #|> dplyr::arrange(desc(count)) 
+  |> ggplot2::ggplot(aes(x = cluster_id, y = count)) 
+  + geom_bar(stat = "identity", width = 0.7
+             ,fill="#f68060") 
+             #alpha=.6, width=.5)
+  + coord_flip()
+  + xlab("Cluster_id") + ylab("Count")
+  + theme(text = element_text(size = 18)) 
+  + ggtitle("")
+  + theme_bw()
+)
+
+# unique cluster id count in each tissue
+MB_Xeno_clusterId <- MB_Xeno %>% 
+  group_by(tissue_id) %>% 
+  summarise(cell_count = n(),
+            num_unique_cluster = length(unique(cluster_id)))
+MB_Xeno_clusterId
+sd(MB_Xeno_clusterId$num_unique_cluster)
+# Barplot for unique cluster id count in each tissue
+tissue_cluster <- ggplot(MB_Xeno_clusterId, aes(y = tissue_id, x = num_unique_cluster)) + 
+  geom_bar(stat = "identity", fill = "#f68060") + 
+  theme_minimal() +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1,size = 12),
+        panel.background = element_rect(fill = "white"))
+
+# Arrange two plot objects on a page.
+arrange <- ggarrange(
+  Cluster_count_all, tissue_cluster,
+  labels = c("A", "B"),
+  widths = c(2, 1), # Relative widths for the plots. Adjust as needed.
+  heights = c(1.5, 1) # Relative heights for the plots. Adjust as needed.
+) + theme(text = element_text(size = 15))
+arrange
+```
+
+
+#cluster_id count
+```{r}
+# cell numbers of each cluster_id
+Cluster_count_all <- (
+  dplyr:: count(MB_Xeno, cluster_id) 
+  |> dplyr::rename(count = n) 
+  |> dplyr::mutate(cluster_id = forcats::fct_reorder(cluster_id, count))
+  #|> dplyr::arrange(desc(count)) 
+  |> ggplot2::ggplot(aes(x = cluster_id, y = count)) 
+  + geom_bar(stat = "identity", width = 0.7
+             ,fill="#f68060") 
+             #alpha=.6, width=.5)
+  + coord_flip()
+  + xlab("Cluster_id") + ylab("Count")
+  + theme(text = element_text(size = 18)) 
+  + ggtitle("")
+  + theme_bw()
+)
+
+# unique cluster id count in each tissue
+MB_Xeno_clusterId <- MB_Xeno %>% 
+  group_by(tissue_id) %>% 
+  summarise(cell_count = n(),
+            num_unique_cluster = length(unique(cluster_id)))
+MB_Xeno_clusterId
+# Barplot for unique cluster id count in each tissue
+tissue_cluster <- ggplot(MB_Xeno_clusterId, aes(x = tissue_id, y = num_unique_cluster)) + 
+  geom_bar(stat = "identity", fill = "#f68060") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1,size = 8),
+        panel.background = element_rect(fill = "white"))
+
+# Arrange two plot objects on a page.
+arrange <- ggarrange(
+  Cluster_count_all, tissue_cluster,
+  labels = c("A", "B"),
+  widths = c(2, 1), # Relative widths for the plots. Adjust as needed.
+  heights = c(1.5, 1) # Relative heights for the plots. Adjust as needed.
+) + theme(text = element_text(size = 15))
+arrange
+```
+
+
+# Create a function which give cluster-tissue distribution heatmap
+```{r}
+tissue_heatmap <- function(data_segment){
+ p <-data_segment %>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id= paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+    ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Cluster_id", y = "sample_id", title = "Cluster-Sample Distribution for tissue_id")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 9),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 8, face = "bold"),
+        legend.key.height = grid::unit(0.5, "cm"),
+        legend.key.width = grid::unit(0.5, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(size = 8,vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.7),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+  return(p)}
+```
+# split this dataset MB_Xeno into 9 segments based on different tissue_id. 
+```{r}
+segments <- split(MB_Xeno, MB_Xeno$tissue_id)
+
+tissue_heatmap(segments$`c1m1_non-engrafted`)
+tissue_heatmap(segments$c1m4_CB)
+tissue_heatmap(segments$c2m1_AML)
+tissue_heatmap(segments$c2m1_CB)
+tissue_heatmap(segments$c2m2_AML)
+tissue_heatmap(segment$`c2m2_non-engrafted`)
+tissue_heatmap(segments$c3m2_CB)
+tissue_heatmap(segments$`c3m5_non-engrafted`)
+tissue_heatmap(segments$c5m1_AML)
+
+# ggsave("Phenotype_Sampling.jpeg", path="/Users/cuix23/Desktop/", width = 10, height = 7.5)
+```
+
+```{r}
+# Get average logit.dsDNA_asinh_znorm of each sample id for each unique combination of treatement_id and mouse_id
+
+Avg_sample <- MB_Xeno %>%
+  group_by(sample_id) %>%
+  summarize(average_logit.dsDNA_sample = mean(logit.dsDNA_asinh_znorm, na.rm = TRUE))
+
+
+Avg_sample <- MB_Xeno %>%
+  group_by(sample_id,treatment_id, tissue_id) %>%
+  summarize(average_logit.dsDNA_sample = mean(logit.dsDNA_asinh_znorm, na.rm = TRUE))
+Avg_tissue <- MB_Xeno %>%
+  group_by(treatment_id, tissue_id) %>%
+  summarize(average_logit.dsDNA_tissue = mean(logit.dsDNA_asinh_znorm, na.rm = TRUE))
+```
+
+
+
+
+
+

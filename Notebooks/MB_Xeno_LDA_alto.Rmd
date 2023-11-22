@@ -1,0 +1,46 @@
+---
+title: "MB_Xeno_LDA_alto"
+knit: (function(input, encoding) {
+  rmarkdown::render(input = input,
+                    output_dir = here::here(),
+                     knit_root_dir = getwd())})
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document: 
+    toc: yes
+date: "2023-11-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "../")
+#knitr::opts_knit$set(output.dir = "../Output_Documents/")
+options(dplyr.summarise.inform = FALSE)
+```
+
+
+## Library
+```{r library, warning=FALSE, message=FALSE}
+devtools::install_github("lasy/alto")
+
+library(alto)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(tibble)
+library(stringr)
+library(tidyr)
+```
+
+```{r}
+names(vm_data)
+```
+
+
+
+
+
+

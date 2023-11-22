@@ -1,0 +1,106 @@
+---
+title: "05_MB_Xeno_LDA_multiChains"
+knit: (function(input, encoding) {
+  rmarkdown::render(input = input,
+                    output_dir = here::here(),
+                     knit_root_dir = getwd())})
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document: 
+    toc: yes
+date: "2023-02-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "../")
+#knitr::opts_knit$set(output.dir = "../Output_Documents/")
+options(dplyr.summarise.inform = FALSE)
+```
+
+
+## Library
+```{r library, warning=FALSE, message=FALSE}
+library(rstan)
+library(dplyr)
+library(ggplot2)
+library(randomcoloR)
+library(SpatialExperiment)
+library(here)
+```
+
+
+```{r plot theme}
+theme_set(theme_minimal())
+theme_update(
+  text = element_text(size = 10),
+  legend.text = element_text(size = 10)
+)
+
+
+# plot theme
+remove_x <- theme(
+  axis.text.x = element_blank(),
+  axis.ticks.x = element_blank(),
+  axis.title.x = element_blank()
+)
+
+remove_y <- theme(
+  axis.text.y = element_blank(),
+  axis.ticks.y = element_blank(),
+  axis.title.y = element_blank()
+)
+
+
+
+# force not to use scientific notation
+options(scipen=999)
+```
+
+```{r}
+library(here)
+set_here("/Users/cuixinyue/Desktop/MB_Xeno")
+```
+
+## Dataset
+
+Load the TNBC SPE object.
+```{r dataset, warning=FALSE, message=FALSE}
+load(file = here("05_MB_Xeno_DA_multiChains","02_MB_Xeno_spe.rds"))
+spe
+```
+
+## Pre-process
+### Document-Term Matrix
+
+We want to create the Document-Term matrix of the dataset where the rows are the sample identity and columns are the cell types fill with counts. The expected dimension of the DTM is 9 rows by 33 columns.
+
+```{r dtm}
+dtm <- table(spe$tissue_id, spe$cluster_id)
+dim_names <- dimnames(dtm)
+dim(dtm)
+```
+### Posterior Sampling
+
+We want to estimate the parameters $\theta$ and $B = \left[\beta_{1}, \cdots, \beta_{K} \right]^{T}$, and we estimate using Hamiltonian Monte Carlo(HMC) No-U-Turn-Sampler(NUTS) with one chain and 500, 1000, and 2000 iterations. Out of these iterations, half of the iteration were used as warm-up samples.
+
+We will apply `get_lda_result()` to perform LDA and save results.
+
+```{r lda result, eval=FALSE}
+source(here::here("06_LDA_scripts", "06_get_lda_result.R"))
+
+samples <- get_lda_result(K = 3, alpha = 0.8, gamma = 0.8,
+                          dtm = dtm, iter = 500, chains = 2,
+                          file_fold = "07_LDA_multiChains", save_file = TRUE)
+
+```
+
+
+
+
+
+
+
