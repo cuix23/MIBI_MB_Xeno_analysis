@@ -1,0 +1,137 @@
+---
+title: "Untitled"
+author: "Xinyue_Cui"
+date: "2023-08-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(cytomapper)
+library(SpatialExperiment)
+```
+
+```{r}
+MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MB_Xeno/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+head(MB_Xeno)
+dim(MB_Xeno)
+```
+# Construct count matrix
+##The aim of this section is to create a count matric to be used in creating the spatial experiment where the rows are the protein markers, and the columns are all cells in the output matrix. There are total of 70 markers in the MB_Xeno dataset, thus, the expected dimension of this count matrix is 70 rows by 562226 columns(cells).
+
+
+```{r}
+# filter dataset of mouse c2m1 and c5m1
+# MB_Xeno_1n2 <-MB_Xeno  %>% 
+#   filter(mouse_id %in% c('c2m1','c5m1'))
+# dim(MB_Xeno_1n2)
+MB_Xeno_c1m1 <- segments$c1m1
+dim(MB_Xeno_c1m1)
+
+# extract the require columns(last 70 columns)[from 21 to ]
+MB_Xeno_c1m1_require <- MB_Xeno_c1m1[, 21:90]
+dim(MB_Xeno_c1m1_require)
+colnames(MB_Xeno_c1m1_require)
+# Transpose 
+test_count_c1m1<- t(MB_Xeno_c1m1_require)
+dim(test_count_c1m1)
+rownames(test_count_c1m1)
+all.equal(rownames(test_count_c1m1), colnames(MB_Xeno_c1m1_require))
+
+```
+#Application to create count matrix
+```{r}
+create_countMat <- function(dataset){
+  # Extract the last 70 columns from the dataset(21 to 90 columns)
+  dataset <- dataset[, 21:90]
+  # De-select metal markers
+  # Transpose the matrix to count matrix
+  count_matrix <- t(dataset)
+  return(count_matrix)
+}
+ test_countMat <- create_countMat(MB_Xeno_c1m1)
+ all.equal(test_countMat, test_count_c1m1)
+
+ count_matrix <- create_countMat(MB_Xeno)
+ dim(count_matrix)
+rownames(count_matrix)
+```
+
+#Construct colData
+```{r}
+# extract require columns
+test_colData_c1m1 <- MB_Xeno_c1m1 %>% 
+  select(-rownames(test_count_c1m1))
+
+dim(test_colData_c1m1)
+names(test_colData_c1m1)
+```
+# Application to create colData
+```{r}
+create_colData <- function(dataset, count_matrix){
+  colData <- dataset %>% 
+    select(-rownames(count_matrix))
+  return(colData)
+}
+```
+
+```{r}
+test_colData <- create_colData(MB_Xeno_c1m1, count_matrix)
+
+all.equal(test_colData, test_colData_c1m1)
+colData <- create_colData(MB_Xeno, count_matrix = count_matrix)
+dim(colData)
+names(colData)
+```
+#Spatial information
+```{r}
+spatialCoords <- as.matrix(colData[, c("centroidX", "centroidY")])
+head(spatialCoords)
+dim(spatialCoords)
+```
+```{r}
+# construct spatial experiment
+spe <- SpatialExperiment(
+  assay = count_matrix,
+  colData = colData,
+  spatialCoordsNames = c("centroidX", "centroidY")
+  #spatialCoords = spatialCoords
+)
+spe
+str(spe$tissue_id)
+str(spe$tissue_id)
+```
+
+Saving constructed spe object as RDS file.
+```{r}
+save(spe, file = here::here("02_MB_Xeno_spe.rds"))
+```
+
+#Images and segmentation masks
+```{r}
+# imgData(spe)
+# getImg(spe)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

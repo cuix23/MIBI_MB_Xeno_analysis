@@ -1,0 +1,285 @@
+---
+title: "MB_Xeno_LDA_Spiat"
+knit: (function(input, encoding) {
+  rmarkdown::render(input = input,
+                    output_dir = here::here(),
+                     knit_root_dir = getwd())})
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document: 
+    toc: yes
+date: "2023-11-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "../")
+#knitr::opts_knit$set(output.dir = "../Output_Documents/")
+options(dplyr.summarise.inform = FALSE)
+```
+
+
+## Library
+```{r library, warning=FALSE, message=FALSE}
+library(SPIAT)
+library(dplyr)
+#library(ggspavis)
+library(ggplot2)
+library(SpatialExperiment)
+library(here)
+```
+
+```{r}
+load(file = here("Output","RData","02_SPE", "02_MB_Xeno_spe.rds"))
+spe
+```
+
+# Identifying cluster_id  compartment
+```{r}
+# Seperate cluster_id into different categories;
+engrafted_clusters <- c("engrafted_cluster_1","engrafted_cluster_10","engrafted_cluster_2","engrafted_cluster_3","engrafted_cluster_4","engrafted_cluster_5","engrafted_cluster_6","engrafted_cluster_7","engrafted_cluster_8","engrafted_cluster_9" )
+mousehem_clusters <- c("mousehem_cluster_1","mousehem_cluster_10","mousehem_cluster_11","mousehem_cluster_12","mousehem_cluster_2","mousehem_cluster_3","mousehem_cluster_4","mousehem_cluster_5","mousehem_cluster_6","mousehem_cluster_7","mousehem_cluster_8","mousehem_cluster_9")
+mouseniche_clusters <- c("mouseniche_cluster_1","mouseniche_cluster_10","mouseniche_cluster_2","mouseniche_cluster_3","mouseniche_cluster_4","mouseniche_cluster_5","mouseniche_cluster_6","mouseniche_cluster_7","mouseniche_cluster_8","mouseniche_cluster_9")
+unassigned <- c("unassigned")
+```
+
+```{r}
+load(file = here("Output","RData","02_SPE", "02_MB_Xeno_spe.rds"))
+#spe
+colnames(spe) <- paste0("Cell_", 1:dim(assay(spe))[[2]])
+spe
+```
+
+
+```{r}
+color_vectors <- list()
+
+phenotype_col <- setNames(object = c(
+  "#6600CC",
+  "#CC0066",
+  "#CC0066",
+  "#FF0000",
+  "#FFFF00",
+  "#C65911",
+  "#66FF33",
+  "#66FF99",
+  "#0070C0",
+  "#92D050",
+  "#66FFFF",
+  "#2F02BE",
+  "purple",
+  "brown",
+  "green",
+  "grey",
+  "gold",
+  "#112000",
+  "#660010",
+  "#CC0CC0",
+  "#CC0820",
+  "#FF0122",
+  "#FF0C90",
+  "#C65000",
+  "#66FC09",
+  "#66F1CC",
+  "#007009",
+  "#92D300",
+  "#700C01",
+  "orange",
+  "purple",
+  "brown",
+  "green",
+  "grey",
+  "gold"
+  ), unique(spe$cluster_id))
+phenotype_col
+color_vectors$phenotype <- phenotype_col
+```
+
+```{r}
+spe_c2m1_AML <- spe[, spe$tissue_id == "c2m1_AML"]
+#celltype <- tibble(spe_1$mm)
+#coordX <- tibble(spatialCoords(spe_1)[, "centroidX"])
+#coordY <- tibble(spatialCoords(spe_1)[, "centroidY"])
+celltype <- spe_c2m1_AML$cluster_id
+coordX <- spatialCoords(spe_c2m1_AML)[, "centroidX"]
+coordY <- spatialCoords(spe_c2m1_AML)[, "centroidY"]
+```
+
+```{r}
+spiat_sample1 <- SPIAT::format_image_to_spe(format = "general",
+                                    intensity_matrix = assay(spe_c2m1_AML),
+                                    phenotypes = celltype,
+                                    coord_x = coordX,
+                                    coord_y = coordY)
+spiat_sample1
+```
+
+```{r}
+unique_cells <- unique(spiat_sample1$Phenotype)
+engrafted_clusters <- base::subset(unique_cells, unique_cells %in% engrafted_clusters)
+mousehem_clusters<- base::subset(unique_cells, unique_cells %in% mousehem_clusters)
+mouseniche_clusters <- base:: subset(unique_cells, unique_cells %in% mouseniche_clusters)
+```
+
+
+```{r}
+colour_pal <- phenotype_col[unique_cells]
+colour_pal
+```
+
+```{r}
+p1 <- plot_cell_categories(spe_object = spiat_sample1,
+                     categories_of_interest = unique(spiat_sample1$Phenotype),
+                     colour_vector = colour_pal,
+                     feature_colname = "Phenotype") +
+  #scale_color_manual(values = metadata(spiat_sample1)$color_vectors$phenotype) +
+  ggtitle("")
+p1
+```
+```{r}
+spe_ct <- spe[, spe$tissue_id == "c1m4_CB"]
+#celltype <- tibble(spe_1$mm)
+#coordX <- tibble(spatialCoords(spe_1)[, "centroidX"])
+#coordY <- tibble(spatialCoords(spe_1)[, "centroidY"])
+celltype <- spe_ct$cluster_id
+coordX <- spatialCoords(spe_ct)[, "centroidX"]
+coordY <- spatialCoords(spe_ct)[, "centroidY"]
+
+spiat_ct <- SPIAT::format_image_to_spe(format = "general",
+                                    intensity_matrix = assay(spe_ct),
+                                    phenotypes = celltype,
+                                    coord_x = coordX,
+                                    coord_y = coordY)
+spiat_ct 
+unique_cells <- unique(spiat_ct$Phenotype)
+engrafted_clusters <- base::subset(unique_cells, unique_cells %in% engrafted_clusters)
+mousehem_clusters<- base::subset(unique_cells, unique_cells %in% mousehem_clusters)
+mouseniche_clusters <- base:: subset(unique_cells, unique_cells %in% mouseniche_clusters)
+colour_pal <- phenotype_col[unique_cells]
+colour_pal
+
+plot_cell_categories(spe_object = spiat_ct ,
+                     categories_of_interest = unique(spiat_ct $Phenotype),
+                     colour_vector = colour_pal,
+                     feature_colname = "Phenotype") +
+  #scale_color_manual(values = metadata(spiat_sample1)$color_vectors$phenotype) +
+  ggtitle("")
+```
+
+```{r}
+library(SPIAT)
+library(ggplot2)
+
+# Define your function
+plot_spe <- function(tissue) {
+  # Subsetting the 'spe' object for tissue_id "c1m4_CB"
+  spe_1 <- spe[, spe$tissue_id == tissue]
+
+  # Extracting cell types, coordinates
+  celltype <- spe_1$cluster_id
+  coordX <- spatialCoords(spe_1)[, "centroidX"]
+  coordY <- spatialCoords(spe_1)[, "centroidY"]
+
+  # Formatting for SPIAT
+  spiat_tissue <- SPIAT::format_image_to_spe(format = "general",
+                                         intensity_matrix = assay(spe_1),
+                                         phenotypes = celltype,
+                                         coord_x = coordX,
+                                         coord_y = coordY)
+
+  # Filtering unique cells and clusters
+  unique_cells <- unique(spiat_tissue$Phenotype)
+  engrafted_clusters <- base::subset(unique_cells, unique_cells %in% engrafted_clusters)
+  mousehem_clusters <- base::subset(unique_cells, unique_cells %in% mousehem_clusters)
+  mouseniche_clusters <- base::subset(unique_cells, unique_cells %in% mouseniche_clusters)
+  colour_pal <- phenotype_col[unique_cells]
+
+  # Plotting
+  plot <- plot_cell_categories(spe_object = spiat_tissue,
+                               categories_of_interest = unique(spiat_tissue$Phenotype),
+                               colour_vector = colour_pal,
+                               feature_colname = "Phenotype") +
+    ggtitle("")
+
+  return(plot)
+}
+
+# Example usage
+# plot <- process_and_plot_spe(spe, engrafted_clusters, mousehem_clusters, mouseniche_clusters, phenotype_col)
+# print(plot)
+```
+
+```{r}
+plot_spe("c1m1_non-engrafted")
+plot_spe("c1m4_CB")
+plot_spe("c2m1_AML")
+plot_spe("c2m1_CB")
+plot_spe("c2m2_AML")
+plot_spe("c2m2_non-engrafted")
+plot_spe("c3m2_CB")
+plot_spe("c3m5_non-engrafted")
+plot_spe("c5m1_AML")
+```
+```{r}
+table(MB_Xeno$tissue_id)
+```
+
+
+```{r}
+library(SPIAT)
+library(ggplot2)
+
+# Define your function
+plot_spe_sample <- function(sample_id_value) {
+  # Subsetting the 'spe' object for tissue_id "c1m4_CB"
+  spe_sample <- spe[, spe$sample_id == sample_id_value]
+
+  # Extracting cell types, coordinates
+  celltype <- spe_sample$cluster_id
+  coordX <- spatialCoords(spe_sample)[, "centroidX"]
+  coordY <- spatialCoords(spe_sample)[, "centroidY"]
+
+  # Formatting for SPIAT
+  spiat_sample <- SPIAT::format_image_to_spe(format = "general",
+                                         intensity_matrix = assay(spe_sample),
+                                         phenotypes = celltype,
+                                         coord_x = coordX,
+                                         coord_y = coordY)
+
+  # Filtering unique cells and clusters
+  unique_cells <- unique(spiat_sample$Phenotype)
+  engrafted_clusters <- base::subset(unique_cells, unique_cells %in% engrafted_clusters)
+  mousehem_clusters <- base::subset(unique_cells, unique_cells %in% mousehem_clusters)
+  mouseniche_clusters <- base::subset(unique_cells, unique_cells %in% mouseniche_clusters)
+  colour_pal <- phenotype_col[unique_cells]
+
+  # Plotting
+  plot <- plot_cell_categories(spe_object = spiat_sample,
+                               categories_of_interest = unique(spiat_sample$Phenotype),
+                               colour_vector = colour_pal,
+                               feature_colname = "Phenotype") +
+    ggtitle("")
+
+  return(plot)
+}
+
+# Example usage
+# plot <- process_and_plot_spe(spe, engrafted_clusters, mousehem_clusters, mouseniche_clusters, phenotype_col)
+# print(plot)
+```
+
+```{r}
+table(MB_Xeno$sample_id)
+```
+
+```{r}
+plot_spe_sample("c5m1_AML_Ct_1846_1")
+plot_spe_sample("c5m1_AML_Ct_1846_2")
+plot_spe_sample("c5m1_AML_Ct_1846_3")
+plot_spe_sample("c5m1_AML_Ct_1845_9")
+\
+```
+
