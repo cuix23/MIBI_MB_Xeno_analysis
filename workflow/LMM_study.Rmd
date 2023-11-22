@@ -1,0 +1,72 @@
+---
+title: "Untitled"
+author: "Xinyue_Cui"
+date: "2023-10-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+sleepstudy
+lme.3 <- lmer ( Reaction ~ Days + ( Days | Subject ) , data= sleepstudy )
+fixef(lme.3)
+ranef(lme.3)
+```
+
+```{r}
+# Get average logit.dsDNA_asinh_znorm for each unique combination of treatement_id and mouse_id
+Avg <- sleepstudy%>%
+  group_by(Days,Subject) %>%
+  summarize(average_logit.dsDNA = mean(logit.dsDNA, na.rm = TRUE))
+
+# Pairwise plot of treatment_id and Average dsDNA_asinh_znorm for each Mouse_id
+
+ggplot(sleepstudy, aes(x=Days, y=Reaction)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) +
+  facet_wrap(~Subject, ncol = 6, strip.position = "top") + 
+  scale_y_continuous(limits=c()) +
+  theme_minimal()
+```
+
+```{r}
+library(ggplot2)
+
+# Determine a common y-intercept
+common_intercept <- min(sleepstudy$Reaction[sleepstudy$Days == 0])
+
+# Generate data frame for the straight line
+line_data <- data.frame(
+  Days = rep(0:9, each = 1),
+  Reaction = 251.40510 + 10.46729  * rep(0:9, each = 1),
+  Subject = rep(unique(sleepstudy$Subject), each = length(0:9))
+)
+# Plot
+ggplot(sleepstudy, aes(x=Days, y=Reaction)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) +
+  geom_line(data = line_data, aes(x = Days, y = Reaction, group = Subject), color = "red") +  # Adding line with slope of 2
+  facet_wrap(~Subject, ncol = 6, strip.position = "top") + 
+  theme_minimal()
+
+```
+```{r}
+library(ggplot2)
+
+# Example data
+data <- data.frame(
+  x1 = rep(1:10, 3),
+  y = rnorm(30),
+  category = rep(c("A", "B", "C"), each = 10)
+)
+
+ggplot(data, aes(x = x1, y = y)) +
+  geom_point() +
+  facet_wrap(~category)
+
+```
+

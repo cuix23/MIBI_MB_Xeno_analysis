@@ -1,0 +1,272 @@
+---
+title: "MB_Xeno Linear Mixed Model"
+author: "Xinyue_Cui"
+date: "2023-10-07"
+output: html_document
+---
+# packages
+```{r}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(cytomapper)
+library(ggplot2)
+library(formattable)
+library(magrittr)
+library(lme4)
+library(car)
+BiocManager::install("phyloseq")
+Yes
+library(ggspavis)
+```
+
+# The dataset MB_ Xeno
+```{r}
+MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MB_Xeno/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+
+# colnames(MB_Xeno)
+# Now, I want to create a new column called tissue_id, which is the unique combination of experience_id and mouse_id. We get 9 unique tissue in total.
+MB_Xeno$tissue_id <- paste(MB_Xeno$mouse_id, MB_Xeno$experiment_id, sep="_")
+
+# Convert tissue_id to a factor based on the order
+custom_order <- c("c1m1_non-engrafted","c3m2_CB","c5m1_AML", "c2m2_non-engrafted","c1m4_CB","c2m1_AML", "c3m5_non-engrafted", "c2m1_CB","c2m2_AML")
+MB_Xeno$tissue_id <- factor(MB_Xeno$tissue_id, levels = custom_order)
+# Convert treatment_id to a factor based on the order
+custom_order_1 <- c("Ct","AraC_D2","AraC_D9") 
+MB_Xeno$treatment_id <- factor(MB_Xeno$treatment_id,levels = custom_order_1)
+
+
+MB_Xeno$treatment_id <- as.factor(as.character(MB_Xeno$treatment_id))
+MB_Xeno$mouse_id <- as.factor(as.character(MB_Xeno$mouse_id))
+MB_Xeno$tissue_id <- as.factor(as.character(MB_Xeno$tissue_id))
+MB_Xeno$sample_id <- as.factor(as.character(MB_Xeno$sample_id))
+MB_Xeno$experiment_id <- as.factor(as.character(MB_Xeno$experiment_id))
+
+table(MB_Xeno$tissue_id)
+dim(MB_Xeno)
+table(MB_Xeno$treatment_id)
+```
+
+create a contingency table that displays the frequency counts of the combinations between the tissue_id and treatment_id variables from the MB_Xeno dataset
+```{r}
+table(MB_Xeno$tissue_id,MB_Xeno$treatment_id)
+```
+generate contingency tables to examine the relationship between the 'tissue_id' and three other variables: 'BlockID_1', 'BlockID_2', and 'FOV', within the 'MB_Xeno' dataset
+```{r}
+# get a distribution plot of CD45_asinh
+ggplot(MB_Xeno, aes(x = CD45_asinh)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot of CD45_asinh",
+       x = "Variable Value",
+       y = "Density")
+
+ggplot(MB_Xeno, aes(x =treatment_id, y=CD45_asinh))+geom_violin()
+```
+# log transformation of all protein markers
+```{r}
+#Logistic transformation of marker
+MB_Xeno$logit.CD45_asinh <- log(MB_Xeno$CD45_asinh)
+# View the subset data
+head(MB_Xeno)
+
+# Convert factor or character column to numeric
+MB_Xeno$logit.CD45_asinh <- as.numeric(as.character(MB_Xeno$logit.CD45_asinh))
+# Check for NAs or infinite values
+sum(is.na(MB_Xeno$logit.CD45_asinh))
+sum(is.infinite(MB_Xeno$logit.CD45_asinh))
+MB_Xeno$logit.CD45_asinh[is.infinite(MB_Xeno$logit.CD45_asinh)] <- -9
+min(MB_Xeno$logit.CD45_asinh)
+max(MB_Xeno$logit.CD45_asinh)
+# Remove rows with infinite values in the  MB_Xeno$logit.CD45_asinh column
+MB_Xeno <- MB_Xeno[!is.infinite(MB_Xeno$logit.CD45_asinh), ]
+# get a distribution plot of log.dsDNA
+ggplot(MB_Xeno, aes(x =  MB_Xeno$logit.CD45_asinh)) +
+  geom_density(fill = "blue", alpha = 0.5)  +
+  xlim(-10,2)+
+  labs(title = "Density Plot of logistic transformation of marker ",
+       x = "Variable Value",
+       y = "Density")
+```
+Interpret of LMM
+Intercept :the estimated mean value for the group of  Ct treatment. 
+Treatement_idAraC_D2: the difference in the response between AraC_D2 and Ct.
+Treatement_idAraC_D9: the difference in the response between AraC_D9 and Ct.
+
+```{r}
+head(MB_Xeno)
+levels(MB_Xeno$treatment_id)
+MB_Xeno.lme2 <- lmer(logit.CD45_asinh ~ treatment_id + (treatment_id| tissue_id ), data= MB_Xeno)
+summary(MB_Xeno.lme2 )
+ranef(MB_Xeno.lme2)
+fixef(MB_Xeno.lme2)
+```
+# Build a data set for graph
+```{r}
+# Selecting the desired columns
+subset_MB_Xeno <- MB_Xeno %>%
+  select(sample_id, experiment_id, treatment_id,tissue_id, logit.CD45_asinh)
+subset_MB_Xeno$type <- rep(c("observations"), each = length(subset_MB_Xeno$sample_id))
+head(subset_MB_Xeno)
+summary(subset_MB_Xeno)
+
+# Convert the class of treatment_id and tissue_id column to factor
+str(subset_MB_Xeno)
+custom_order <- c("c1m1_non-engrafted","c3m2_CB","c5m1_AML", "c2m2_non-engrafted","c1m4_CB","c2m1_AML", "c3m5_non-engrafted", "c2m1_CB","c2m2_AML")
+subset_MB_Xeno$tissue_id <- factor(MB_Xeno$tissue_id, levels = custom_order)
+# Convert treatment_id to a factor based on the order
+custom_order_1 <- c("Ct","AraC_D2","AraC_D9") 
+subset_MB_Xeno$treatment_id <- factor(MB_Xeno$treatment_id,levels = custom_order_1)
+# LMM on subset_MB_Xeno
+
+df <- data.frame(ranef(MB_Xeno.lme2))
+# Ct data
+slope_Ct <- data.frame(
+  tissue_id = df$grp[df$term == "(Intercept)"],
+  logit.CD45_asinh = df$condval[df$term == "(Intercept)"]
+)
+  slope_Ct$treatment_id <- rep(c("Ct"), each = 9)
+  slope_Ct$experiment_id <- rep(c("non-engrafted","CB","AML"),each = 3)
+  slope_Ct$sample_id  <- NA
+# AraC_D2 data
+  slope_AraC_D2  <- data.frame(
+  tissue_id = df$grp[df$term == "treatment_idAraC_D2"],
+  logit.CD45_asinh =df$condval[df$term == "(Intercept)"]+ df$condval[df$term == "treatment_idAraC_D2"]
+)
+  slope_AraC_D2$treatment_id <- rep(c("AraC_D2"), each = 9)
+  slope_AraC_D2$experiment_id <- rep(c("non-engrafted","CB","AML"),each = 3)
+  slope_AraC_D2$sample_id  <- NA
+# AraC_D9 data
+  slope_AraC_D9 <- data.frame(
+  tissue_id = df$grp[df$term == "treatment_idAraC_D9"],
+  logit.CD45_asinh = df$condval[df$term == "(Intercept)"]+df$condval[df$term == "treatment_idAraC_D9"]
+)
+  slope_AraC_D9$treatment_id <- rep(c("AraC_D9"), each = 9)
+  slope_AraC_D9$experiment_id <- rep(c("non-engrafted","CB","AML"),each = 3)
+  slope_AraC_D9$sample_id  <- NA
+# Take a look at the data
+slope <- rbind(slope_Ct, slope_AraC_D2, slope_AraC_D9)
+slope$type <- rep(c("Mixed model"))
+# add a row about fixed
+# data.frame(fixef(MB_Xeno.lme1))
+fixed <- data.frame(
+  logit.CD45_asinh = rep(c(-1.6086496	,-1.6086496-0.3015021	,-1.6086496-1.1527743),each = 9),
+  experiment_id = NA ,
+  sample_id = NA,
+  treatment_id = rep(c("Ct","AraC_D2","AraC_D9"), each = 9),
+  tissue_id = rep(c("c1m1_non-engrafted","c3m2_CB","c5m1_AML", "c2m2_non-engrafted","c1m4_CB","c2m1_AML", "c3m5_non-engrafted", "c2m1_CB","c2m2_AML"), times = 3),
+  type = "all"
+)
+# Combine the data
+plot_data <-rbind(subset_MB_Xeno, slope,fixed)
+plot_data
+```
+
+```{r}
+custom_order <- c("c1m1_non-engrafted","c3m2_CB","c5m1_AML", "c2m2_non-engrafted","c1m4_CB","c2m1_AML", "c3m5_non-engrafted", "c2m1_CB","c2m2_AML")
+plot_data$tissue_id <- factor(plot_data$tissue_id, levels = custom_order)
+# Convert treatment_id to a factor based on the order
+custom_order_1 <- c("Ct","AraC_D2","AraC_D9") 
+plot_data$treatment_id <- factor(plot_data$treatment_id,levels = custom_order_1)
+
+#plot
+ggplot(plot_data ,aes(x=treatment_id,y=logit.CD45_asinh,color = type))+geom_point()+facet_wrap(~tissue_id, ncol = 3, strip.position = "top")+
+  theme_minimal() 
+```
+
+
+```{r}
+df <- data.frame(ranef(MB_Xeno.lme1))
+df$condval
+intercept_condvals <- df$condval[df$term == "(Intercept)"]
+head(df)
+ggplot(df,aes(x=term,y=condval))+geom_point()+facet_wrap(~grp, ncol = 3, strip.position = "top")
+ggplot(df,aes(x = term, y=condval,color = grp))+geom_point()
+ggplot(df,aes(x = grp, y=condval,color = term))+geom_point()
+```
+Slope data set
+```{r}
+intercept_condvals <- df$condval[df$term == "(Intercept)"]
+treatment_idAraC_D2_condvals <- df$condval[df$term == "treatment_idAraC_D2"]
+treatment_idAraC_D9_condvals <- df$condval[df$term == "treatment_idAraC_D9"]
+slope <- data.frame(
+  tissue = df$grp[df$term == "(Intercept)"],
+  intercept = df$condval[df$term == "(Intercept)"],
+  treatment_idAraC_D2 = df$condval[df$term == "treatment_idAraC_D2"],
+  treatment_idAraC_D9 = df$condval[df$term == "treatment_idAraC_D9"]
+)
+ggplot(slope,aes(x = tissue, y=intercept))+geom_point()
+```
+
+
+
+
+```{r}
+table(MB_Xeno$treatment_id)
+table(MB_Xeno$tissue_id)
+
+ggplot(MB_Xeno, aes(x=treatment_id, y=logit.dsDNA_asinh_znorm)) +ylim(-2,4)+
+  geom_violin(trim=TRUE) +
+  geom_smooth(method="lm", se=FALSE) +
+  stat_summary(fun=mean, geom="point", shape=10, size=1, color="red") + # Adding average point
+  facet_wrap(~tissue_id, ncol = 3, strip.position = "top") + 
+  theme_minimal() +
+  labs(title="Pairwise plot of treatment_id and Average logit.dsDNA_asinh_znorm for each tissue_id")
+```
+```{r}
+# Generate data frame for the straight line
+line_df <- data.frame(
+  treatment_id = rep(c(1,2,3), each = 3),
+  
+  logit.dsDNA_asinh_znorm =  + 10.46729  * rep(0:9, each = 1),
+  Subject = rep(unique(sleepstudy$Subject), each = length(0:9))
+)
+# Plot
+ggplot(sleepstudy, aes(x=Days, y=Reaction)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) +
+  geom_line(data = line_data, aes(x = Days, y = Reaction, group = Subject), color = "red") +  # Adding line with slope of 2
+  facet_wrap(~Subject, ncol = 6, strip.position = "top") + 
+  theme_minimal()
+```
+
+```{r}
+# Plot
+ggplot(MB_Xeno, aes(x = treatment_id, y = logit.dsDNA_asinh_znorm, group = 1)) +
+  geom_line() +
+  geom_point() +   # Optional, to display points as well
+  theme_minimal()
+```
+
+```{r}
+# Convert treatment_id to numeric
+MB_Xeno$treatment_num <- as.numeric(as.factor(MB_Xeno$treatment_id))
+table(MB_Xeno$treatment_num)
+# Determine the intercept and slope
+intercept <- 5  # Example value, adjust as needed
+slope <- 0.5   # Example value, adjust as needed
+
+ggplot(MB_Xeno, aes(x = treatment_num, y = logit.dsDNA_asinh_znorm)) +
+  geom_line(aes(group = 1)) +
+  geom_point() +
+  # geom_abline(intercept = intercept, slope = slope, linetype = "dashed", color = "blue") +  # Adds a line with predetermined slope
+  scale_x_continuous(breaks = MB_Xeno$treatment_num, labels = MB_Xeno$treatment_id) + 
+  facet_wrap(~ _id, ncol = 3, strip.position = "top") + # Ensures categorical labels are shown on x-axis
+  theme_minimal()
+```
+```{r}
+colnames(MB_Xeno)
+MB_Xeno.lme2 <- lmer(logit.dsDNA_asinh_znorm ~ treatment_num + (treatment_num| tissue_id ), data= MB_Xeno)
+ranef(MB_Xeno.lme2)
+fixef(MB_Xeno.lme2)
+```
+
+
+X be the treatment id
+```{r}
+ggplot(MB_Xeno, aes(x=treatment_num, y=logit.dsDNA_asinh_znorm)) +geom_line()+
+  geom_point() +
+  facet_wrap(~tissue_id, ncol = 3, strip.position = "top") + 
+  scale_y_continuous(limits=c()) +
+  theme_minimal() +
+  labs(title="Pairwise plot of treatment_id and Average logit.dsDNA_asinh_znorm for each tissue_id") 
+```

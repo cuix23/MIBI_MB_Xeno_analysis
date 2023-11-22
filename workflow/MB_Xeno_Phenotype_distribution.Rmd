@@ -1,0 +1,525 @@
+---
+title: "Untitled"
+author: "Xinyue_Cui"
+date: "2023-08-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Libraries
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(formattable)
+library(RColorBrewer)
+MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MIBI/MB_Xeno/MIBI-MB-Xeno-Pilot_scdata (1).csv")
+```
+
+#cluster_id count
+```{r}
+Cluster_count_all <- (
+  dplyr:: count(MB_Xeno, cluster_id) 
+  |> dplyr::rename(count = n) 
+  |> dplyr::mutate(cluster_id = forcats::fct_reorder(cluster_id, count))
+  #|> dplyr::arrange(desc(count)) 
+  |> ggplot2::ggplot(aes(x = cluster_id, y = count)) 
+  + geom_bar(stat = "identity", width = 0.7
+             ,fill="#f68060") 
+             #alpha=.6, width=.5)
+  + coord_flip()
+  + xlab("Cluster_id") + ylab("Count")
+  + theme(text = element_text(size = 18)) 
+  + ggtitle("")
+  + theme_bw()
+)
+Cluster_count_all
+```
+# unique cluster_id count in each mouse
+```{r}
+mouse_cluster <- (
+  MB_Xeno
+  |> dplyr::group_by(mouse_id)
+  |> dplyr::summarise(unique_clusterid_Count = length(unique(cluster_id)))
+  |> dplyr::mutate(mouse_id = factor(mouse_id))
+  #|> dplyr::mutate(sample_id = factor(paste0("Sample_", sample_id)))
+  #|> dplyr::mutate(sample_id = forcats::fct_reorder(sample_id, unique_mmCount))
+  |> ggplot2::ggplot(aes(x = mouse_id, y = unique_clusterid_Count))
+  + geom_bar(stat = "identity", width = 0.7
+             ,fill="#f68060") 
+             #alpha=.8, width=.7)
+  #+ coord_flip()
+  + xlab("Mouse Id") + ylab("Unique Cluster id Count")
+  + ggtitle("")
+  + theme(text = element_text(size = 18)) 
+  + scale_x_discrete(guide = guide_axis(angle = 90))
+  + theme_bw()
+)
+sample_cluster
+```
+
+```{r}
+arrange <- ggpubr::ggarrange(
+  Cluster_count_all, mouse_cluster,
+   labels = c("A", "B"),
+   widths = 10, heights = 6) +
+  theme(text = element_text(size = 18)) 
+
+# ggsave(filename = "sample_cellType_plots.eps", plot = arrange, device = "eps",
+#        width = 10, height = 5,
+#        path = here::here("Output", "Figures"))
+```
+
+# Phenotype-Sample distribution
+```{r}
+# number of cells in each unique combination of sample id and cluster id
+cluster_count <- dplyr::count(MB_Xeno, sample_id, cluster_id) %>% 
+  dplyr::rename(count = n)
+head(cluster_count)
+```
+```{r}
+# histogram 1(all count)
+ hist(cluster_count$count,
+     main = "Histogram of all clusterid count",
+     xlab = "Clusterid count", ylab = "Counts", labels = cluster_count$count) 
+
+# histogram 2(count up to 10000)
+hist(cluster_count$count[cluster_count$count < 10000],
+     main = "Histogram of cell type count < 10000",
+     xlab = "Cluster type count", ylab = "Counts",
+     breaks = 20)
+# histogram 2(count up to 1000)
+hist(cluster_count$count[cluster_count$count < 1000],
+     main = "Histogram of cell type count < 1000",
+     xlab = "Cluster type count", ylab = "Counts",
+     breaks = 30)
+# histogram 2(count up to 250)
+hist(cluster_count$count[cluster_count$count < 250],
+     main = "Histogram of cell type count < 250",
+     xlab = "Cluster type count", ylab = "Counts",
+     breaks = 20)
+
+# histogram 2(count up to 100)
+hist(cluster_count$count[cluster_count$count < 100],
+     main = "Histogram of cell type count < 100",
+     xlab = "Cluster type count", ylab = "Counts",
+     breaks = 20)
+```
+## split this dataset into 7 segments based on different unique values of mouse_id. 
+```{r}
+segments <- split(MB_Xeno, MB_Xeno$mouse_id)
+MB_Xeno_c1m1 <- segments$c1m1
+length(unique(MB_Xeno_c1m1$sample_id))
+MB_Xeno_c1m4 <- segments$c1m4
+MB_Xeno_c2m1 <- segments$c2m1
+MB_Xeno_c2m2 <- segments$c2m2
+MB_Xeno_c3m2 <- segments$c3m2
+MB_Xeno_c3m5 <- segments$c3m5
+MB_Xeno_c5m1 <- segments$c5m1
+```
+
+# phenotype-sample distribution heatmap for c1m1
+```{r}
+# phenotype-sample distribution heatmap
+ p_c1m1 <-MB_Xeno_c1m1 %>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+ ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c1m1")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+
+```
+# phenotype-sample distribution heatmap for c1m4
+```{r}
+p_c1m4 <- MB_Xeno_c1m4%>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+  ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c1m4")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+
+```
+# phenotype-sample distribution heatmap for c2m1
+```{r}
+p_c2m1 <- MB_Xeno_c2m1%>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+  ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c2m1")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+
+```
+# phenotype-sample distribution heatmap for c2m2
+```{r}
+p_c2m2 <- MB_Xeno_c2m2%>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+  ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c2m2")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+
+```
+# phenotype-sample distribution heatmap for c3m2
+```{r}
+p_c3m2 <- MB_Xeno_c3m2%>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+  ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c3m2")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+
+```
+
+# phenotype-sample distribution heatmap for c3m5
+```{r}
+p_c3m5 <- MB_Xeno_c3m5%>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+  ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c3m5")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+
+```
+
+# phenotype-sample distribution heatmap for c5m1
+```{r}
+p_c5m1 <- MB_Xeno_c5m1%>% 
+   with(table(sample_id, cluster_id)) %>% 
+  as.data.frame() %>% 
+  mutate(sample_id = paste("Sample", sample_id)) %>%
+  mutate(count = cut(as.numeric(Freq), breaks = c(-1, 1.1, 5.1, 10.1, 
+                                   25.1, 50.1, 100.1, 250.1, 500.1, 1000.1, 2000.1, max(Freq, na.rm = TRUE)+1),
+                     labels = c("0-1", "1-5", "5-10", "10-25", "25-50",
+                                "50-100", "100-250", "250-500", "500-1000", "1000-2000", ">2000"))) %>% 
+  mutate(count = factor(as.character(count), levels = rev(levels(count)))) %>% 
+  
+  ggplot(mapping = aes(x = cluster_id, y = sample_id, fill = count)) +
+    geom_tile(colour = "white", linewidth = 0.3) +
+  
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
+    labs(x = "Phenotype", y = " sample_id", title = "Phenotype-Sample Distribution for mouse_id = c5m1")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    
+    # color palette
+    #scale_fill_manual(values = rev(brewer.pal(11, "RdGy")), na.value = "azure4") + #RdGy RdBu
+    scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
+  
+    # theme
+    theme_grey(base_size = 7)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.2, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     )+
+    #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
+    scale_x_discrete(guide = guide_axis(angle = 45))
+#  ggsave("Phenotype_Sampling.jpeg", path = "/Users/henzhwang/Desktop/", width = 10, height = 7.5)
+```
+
+```{r}
+p_c1m1
+p_c1m4 
+p_c2m1 
+p_c2m2 
+p_c3m2 
+p_c3m5 
+p_c5m1 
+```
+
+```{r}
+# number of cell_type for each cluster_id in each treatment 
+# percentage of each treatment in each cluster_id
+MB_Xeno %>% 
+  group_by(cluster_id) %>% 
+  summarise(cluster_n = n(),
+            n_ct = n_distinct(treatment_id), 
+            AraC_D2 = as.character(as.list(unique(treatment_id))[1]),
+            AraC_D2_n = sum(treatment_id == as.character(as.list(unique(treatment_id))[1])),
+            ct = as.character(as.list(unique(treatment_id))[2]),
+            ct_n = sum(treatment_id == as.character(as.list(unique(treatment_id))[2])),
+            AraC_D9 = as.character(as.list(unique(treatment_id))[3]),
+            AraC_D9_n = sum(treatment_id==as.character(as.list(unique(treatment_id))[3]))) %>% 
+  mutate(AraC_D2_f = formattable::percent(AraC_D2_n / cluster_n),
+         ct_f = formattable::percent(ct_n / cluster_n),
+         AraC_D9_f = formattable::percent(AraC_D9_n / cluster_n)) %>% 
+  dplyr::relocate(AraC_D2_f, .after = AraC_D2_n) %>% 
+  dplyr::relocate(ct_f, .after = ct_n) %>% 
+  dplyr::relocate(AraC_D9_f, .after = AraC_D9_n) %>% 
+  #knitr::kable()
+  formattable::formattable(list(AraC_D2_f = color_bar(color = "lightblue"),
+                           ct_f = color_bar(color = "lightpink"),
+                           AraC_D9_f = color_bar(color = "lightgreen"))) # for html
+
+
+```
+
+
+```{r}
+as.data.frame(with(MB_Xeno, table(cluster_id, treatment_id))) %>%
+  ggplot() +
+    #geom_tile(aes(x = cluster_id, y = mm, fill = Freq)) +
+    geom_tile(aes(x = treatment_id, y = cluster_id, fill = Freq)) +
+  
+    # colour palettes
+    scale_fill_distiller(palette = "RdBu", na.value = "azure4")+
+    # labels
+    guides(fill=guide_legend(title = "Number of Cells \nin Each Cluster"))+
+    labs(x = "Phenotype", y = " cluster_id", 
+         title = "Phenotype-Cluster Distribution MB_Xeno")+
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+
+    # theme
+    theme_grey(base_size = 10)+
+    theme(legend.position = "right", legend.direction = "vertical",
+        legend.title = element_text(colour = "black", size = 6),
+        legend.margin = margin(grid::unit(0, "cm")),
+        legend.text = element_text(colour = "grey40", size = 6, face = "bold"),
+        legend.key.height = grid::unit(0.8, "cm"),
+        legend.key.width = grid::unit(0.2, "cm"),
+        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.y = element_text(size = 5, vjust = 0.2, colour = "grey40"),
+        axis.ticks = element_line(linewidth = 0.4),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+     ) +
+    scale_x_discrete(guide = guide_axis(angle = 45))
+```
+
+
+
+
+
+
+
+
+
+
+
+

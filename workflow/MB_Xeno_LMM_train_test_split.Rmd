@@ -1,0 +1,150 @@
+---
+title: "MB_Xeno Linear Mixed Model"
+author: "Xinyue_Cui"
+date: "2023-10-07"
+output: html_document
+---
+# packages
+```{r}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(cytomapper)
+library(ggplot2)
+library(formattable)
+library(magrittr)
+library(lme4)
+library(car)
+library(Metrics)
+library(performance)
+library(lattice)
+library(caret)
+```
+# The dataset MB_ Xeno
+```{r}
+MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MB_Xeno/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+head(MB_Xeno)
+colnames(MB_Xeno)
+# colnames(MB_Xeno)
+# Now, I want to create a new column called tissue_id, which is the unique combination of experience_id and mouse_id. We get 9 unique tissue in total.
+MB_Xeno$tissue_id <- paste(MB_Xeno$mouse_id, MB_Xeno$experiment_id, sep="_")
+table(MB_Xeno$tissue_id)
+MB_Xeno$tissue_id <- as.factor(as.character(MB_Xeno$tissue_id))
+MB_Xeno$treatment_id <- as.factor(as.character(MB_Xeno$treatment_id))
+MB_Xeno$Run <- as.factor(as.character(MB_Xeno$Run))
+MB_Xeno$mouse_id <- as.factor(as.character(MB_Xeno$mouse_id))
+# Convert the first 12 column of MB_Xeno to factor
+# for (i in 1:12) {
+#   if (!is.factor(MB_Xeno[[i]])) {
+#     MB_Xeno[[i]] <- as.factor(MB_Xeno[[i]])
+#   }}
+# str(MB_Xeno[, 1:12])
+
+```
+
+```{r}
+#Logistic transformation of dsDNA_asinh_znorm
+MB_Xeno$logit.dsDNA_asinh_znorm <- log(MB_Xeno$dsDNA_asinh_znorm/(1-MB_Xeno$dsDNA_asinh_znorm))
+# View the subset data
+
+# Convert factor or character column to numeric
+MB_Xeno$logit.dsDNA_asinh_znorm <- as.numeric(as.character(MB_Xeno$logit.dsDNA_asinh_znorm))
+# Check for NAs or infinite values
+sum(is.na(MB_Xeno$logit.dsDNA_asinh_znorm))
+sum(is.infinite(MB_Xeno$logit.dsDNA_asinh_znorm))
+min(MB_Xeno$logit.dsDNA_asinh_znorm)
+max(MB_Xeno$logit.dsDNA_asinh_znorm)
+# Remove rows with infinite values in the logit.dsDNA_asinh_znorm column
+MB_Xeno <- MB_Xeno[!is.infinite(MB_Xeno$logit.dsDNA_asinh_znorm), ]
+# get a distribution plot of log.dsDNA
+ggplot(MB_Xeno, aes(x = logit.dsDNA_asinh_znorm)) +
+  geom_density(fill = "blue", alpha = 0.5)  +
+  labs(title = "Density Plot of logistic transformation of dsDNA_asinh_znorm ",
+       x = "Variable Value",
+       y = "Density")
+```
+
+
+#1. Train Test split of all observation 
+(I am trying to avoid splitting data from the same tissue between training and testing sets to prevent data leakage. )
+##1.1 Split the train test
+70% of the observations is about 393558, So I put tissue_id of c1m1_non-engrafted,c1m4_CB,c2m1_AML, c2m1_CB, c2m2_AML in the train set. （total of 384858 observations). tissue_id in (c2m2_non-engrafted, c3m2_CB, c3m5_non-engrafted, c5m1_AML) into test set
+```{r}
+tissue_id_select <- c("c1m1_non-engrafted","c1m4_CB","c2m1_AML", "c2m1_CB","c2m2_AML" )
+
+train <- MB_Xeno[MB_Xeno$tissue_id %in% tissue_id_select ,]
+test <- MB_Xeno[!MB_Xeno$tissue_id %in% tissue_id_select ,]
+```
+
+```{r}
+# get a distribution plot of dsDNA_asinh_znorm
+ggplot(train, aes(x = dsDNA_asinh_znorm)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  xlim(0, 1) +
+  labs(title = "Density Plot of dsDNA_asinh_znorm ",
+       x = "Variable Value",
+       y = "Density")
+```
+##1.2Model Fitting and Selection
+```{r}
+train.lme1 <- lmer(logit.dsDNA_asinh_znorm ~ treatment_id + ( treatment_id| tissue_id ), data= train )
+summary(train.lme1)
+AIC(train.lme1)
+BIC(train.lme1)
+# table(MB_Xeno$Run, MB_Xeno$tissue_id)
+train.lme2 <- lmer(logit.dsDNA_asinh_znorm ~ treatment_id + (treatment_id|Run ), data= train )
+summary(train.lme2)
+AIC(train.lme2)
+BIC(train.lme2)
+```
+## 1.3 predict on test set
+```{r}
+# Predict on the testing set (hat(y*))
+pred_dsDNA <- predict(train.lme1, newdata = test, re.form = NA)
+hist(x=pred_dsDNA )
+length(pred_dsDNA )
+# Actual (y*)
+actual_dsDNA<- test$logit.dsDNA_asinh_znorm
+length(actual_dsDNA )
+# Calculate RMSE
+sqrt(mean((test$logit.dsDNA_asinh_znorm - pred_dsDNA )^2))
+
+print(paste("RMSE:", rmse_value))
+# Calculate MAE
+mae_value <- mae(actual_dsDNA, pred_dsDNA)
+print(paste("MAE:", mae_value))
+
+# Calculate R-squared
+r_squared <- r2(train.lme1)
+print(paste("R-squared:", r_squared))
+```
+##1.4 Check residuals
+```{r}
+plot(train.lme1)
+hist(residuals(train.lme1))
+qqnorm(residuals(train.lme1))
+qqline(residuals(train.lme1))
+```
+## 1.5 Visualizing random effects
+```{r}
+ranef_plot <- dotplot(ranef(train.lme1, condVar = TRUE))
+print(ranef_plot)
+```
+
+
+
+# 2. Split for training and test data according to stations
+## 2.1 Split
+```{r}
+sample_train <- sample(unique(MB_Xeno$sample_id), size = length(unique(MB_Xeno$sample_id))*0.7)
+training <- MB_Xeno[MB_Xeno$sample_id %in% sample_train,]
+testing <- MB_Xeno[!MB_Xeno$sample_id %in% sample_train,]
+colnames(MB_Xeno)
+```
+## 2.2 fitting a LMM
+```{r}
+model_lmm1 <- lmer(logit.dsDNA_asinh_znorm ~  treatment_id + (treatment_id|tissue_id), data = training)
+summary(model_lmm1)
+lmm1_prd_1 <- predict(model_lmm1, newdata = testing)
+mean((testing$logit.dsDNA_asinh_znorm - lmm1_prd_1 )^2)
+```

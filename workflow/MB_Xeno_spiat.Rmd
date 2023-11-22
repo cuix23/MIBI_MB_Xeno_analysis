@@ -1,0 +1,216 @@
+---
+title: "Untitled"
+author: "Xinyue_Cui"
+date: "2023-08-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# packages
+```{r}
+# BiocManager::install("SPIAT")
+#if (!require("BiocManager", quietly = TRUE))
+ #   install.packages("BiocManager")
+
+# BiocManager::install("ggspavis")
+
+library(SPIAT)
+library(dplyr)
+library(ggspavis)
+library(ggplot2)
+library(SpatialExperiment)
+```
+# load data
+```{r}
+MB_Xeno <- read.csv("/Users/cuixinyue/Desktop/MB_Xeno/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+head(MB_Xeno)
+unique(MB_Xeno$cluster_id)
+```
+# Identifying cluster_id  compartment
+```{r}
+# Seperate cluster_id into different categories;
+engrafted_clusters <- c("engrafted_cluster_1","engrafted_cluster_10","engrafted_cluster_2","engrafted_cluster_3","engrafted_cluster_4","engrafted_cluster_5","engrafted_cluster_6","engrafted_cluster_7","engrafted_cluster_8","engrafted_cluster_9" )
+mousehem_clusters <- c("mousehem_cluster_1","mousehem_cluster_10","mousehem_cluster_11","mousehem_cluster_12","mousehem_cluster_2","mousehem_cluster_3","mousehem_cluster_4","mousehem_cluster_5","mousehem_cluster_6","mousehem_cluster_7","mousehem_cluster_8","mousehem_cluster_9")
+mouseniche_clusters <- c("mouseniche_cluster_1","mouseniche_cluster_10","mouseniche_cluster_2","mouseniche_cluster_3","mouseniche_cluster_4","mouseniche_cluster_5","mouseniche_cluster_6","mouseniche_cluster_7","mouseniche_cluster_8","mouseniche_cluster_9")
+unassigned <- c("unassigned")
+```
+
+```{r}
+#load(here::here("Output", "Data", "03_SPE", "03_TNBC_2018_spe.rds"))
+#spe
+colnames(spe) <- paste0("Cell_", 1:dim(assay(spe))[[2]])
+spe
+```
+
+```{r}
+color_vectors <- list()
+
+phenotype_col <- setNames(object = c(
+  "#6600CC",
+  "#CC0066",
+  "#CC0066",
+  "#FF0000",
+  "#FFFF00",
+  "#C65911",
+  "#66FF33",
+  "#66FF99",
+  "#0070C0",
+  "#92D050",
+  "#66FFFF",
+  "#2F02BE",
+  "purple",
+  "brown",
+  "green",
+  "grey",
+  "gold",
+  "#112000",
+  "#660010",
+  "#CC0CC0",
+  "#CC0820",
+  "#FF0122",
+  "#FF0C90",
+  "#C65000",
+  "#66FC09",
+  "#66F1CC",
+  "#007009",
+  "#92D300",
+  "#700C01",
+  "orange",
+  "purple",
+  "brown",
+  "green",
+  "grey",
+  "gold"
+  ), unique(spe$cluster_id))
+phenotype_col
+color_vectors$phenotype <- phenotype_col
+```
+
+# subset spe with mouse_id = c1m1
+# Question: we should subset one sample or stay with the mouse_id?
+```{r}
+spe_c1m1 <- spe[, spe$mouse_id == "c1m1"]
+#celltype <- tibble(spe_1$mm)
+#coordX <- tibble(spatialCoords(spe_1)[, "centroidX"])
+#coordY <- tibble(spatialCoords(spe_1)[, "centroidY"])
+cluster <- spe_c1m1$cluster_id
+coordX <- spatialCoords(spe_c1m1)[, "centroidX"]
+coordY <- spatialCoords(spe_c1m1)[, "centroidY"]
+```
+#Transform spe into SPIAT format
+```{r}
+spiat_sample_c1m1 <- SPIAT::format_image_to_spe(format = "general",
+                                    intensity_matrix = assay(spe_1),
+                                    phenotypes = cluster,
+                                    coord_x = coordX,
+                                    coord_y = coordY)
+spiat_sample_c1m1
+```
+# Cluster compartment in the tissue
+```{r}
+unique_cells <- unique(spiat_sample_c1m1$Phenotype)
+engrafted_cells <- base::subset(unique_cells, unique_cells %in% engrafted_clusters)
+mousehem_cells <- base::subset(unique_cells, unique_cells %in% mousehem_clusters)
+mouseniche_cells <- base:: subset(unique_cells, unique_cells %in% mouseniche_clusters)
+```
+
+```{r}
+colour_pal <- phenotype_col[unique_cells]
+colour_pal
+```
+
+#Visulazing tissues
+```{r}
+p1 <- plot_cell_categories(spe_object = spiat_sample_c1m1,
+                     categories_of_interest = unique(spiat_sample_c1m1$Phenotype),
+                      colour_vector = colour_pal,
+                      # colour_vector = as.factor(Phenotypes),
+                     feature_colname = "Phenotype") +
+  #scale_color_manual(values = metadata(spiat_sample1)$color_vectors$phenotype) +
+  ggtitle("")
+p1
+```
+# Basic Analysis
+## Cell precentage
+```{r}
+p_cells <- calculate_cell_proportions(spe_object = spiat_sample_c1m1,
+                           reference_celltypes = NULL,
+                           celltypes_to_exclude = NULL,
+                           feature_colname = "Phenotype",
+                           plot.image = TRUE)
+```
+```{r}
+plot_cell_percentages(cell_proportions = p_cells,
+                      cells_to_exclude = NULL,
+                      cellprop_colname = "Proportion_name")
+```
+# unassigned cluster
+```{r}
+p_unassigned <- calculate_cell_proportions(spe_object = spiat_sample_c1m1,
+                           reference_celltypes = NULL,
+                           celltypes_to_exclude = c(mousehem_cells, mouseniche_cells, engrafted_clusters),
+                           feature_colname = "Phenotype",
+                           plot.image = TRUE)
+p_unassigned
+plot_cell_percentages(cell_proportions = p_unassigned,
+                      cells_to_exclude = NULL,
+                      cellprop_colname = "Proportion_name")
+# engrafted_cells 
+# mousehem_clusters
+# mouseniche_cells
+```
+
+# mousehem cluster
+```{r}
+p_mousehem <- calculate_cell_proportions(spe_object = spiat_sample_c1m1,
+                           reference_celltypes = NULL,
+                           celltypes_to_exclude = c(engrafted_cells, mouseniche_cells, unassigned),
+                           feature_colname = "Phenotype",
+                           plot.image = TRUE)
+p_mousehem
+plot_cell_percentages(cell_proportions = p_mousehem,
+                      cells_to_exclude = NULL,
+                      cellprop_colname = "Proportion_name")
+```
+```{r}
+# mouseniche_cluster
+p_mouseniche <- calculate_cell_proportions(spe_object = spiat_sample_c1m1,
+                           reference_celltypes = NULL,
+                           celltypes_to_exclude = c(engrafted_cells, mousehem_cells, unassigned),
+                           feature_colname = "Phenotype",
+                           plot.image = TRUE)
+p_mouseniche
+plot_cell_percentages(cell_proportions = p_mouseniche,
+                      cells_to_exclude = NULL,
+                      cellprop_colname = "Proportion_name")
+```
+#??
+```{r}
+distance <- calculate_pairwise_distances_between_celltypes(
+  spe_object = spiat_sample_c1m1,
+  cell_types_of_interest = c(mousehem_cells,mouseniche_cells),
+  feature_colname = "Phenotype")
+length(mousehem_cells)
+length(mouseniche_cells)
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
