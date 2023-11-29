@@ -75,7 +75,7 @@ get_lda_result <- function(K,
   # save file with specified name
   if (save_file == TRUE) {
     save(stan.fit, 
-         file = here::here("Output", "Data", 
+         file = here::here("Output", "RData", 
                            paste0(file_fold), paste0(fileN)))
   }
   

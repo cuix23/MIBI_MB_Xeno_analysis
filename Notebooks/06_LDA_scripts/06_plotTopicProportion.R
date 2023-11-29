@@ -1,12 +1,12 @@
 #' Plot the topic distribution in all specimens.
 #'
 #' @param theta_aligned List. returned object of thetaAligned().
-#' @param col_names_theta_all Character vector. Column names for long formatted theta. An example is c("iteration", "Sample", "Topic", "topic.dis")
-#' @param SampleIDVarInphyloseq Character. SampleID variable name in phyloseq object.
+#' @param col_names_theta_all Character vector. Column names for long formatted theta. An example is c("iteration", "Tissue", "Topic", "topic.dis")
+#' @param TissueIDVarInphyloseq Character. TissueID variable name in phyloseq object.
 #' @param design Factors of interests.
 #' @inheritParams alignmentMatrix
 #'
-#' @return A ggplot2 object. Histrogram of median of topic proportion in each sample.
+#' @return A ggplot2 object. Histrogram of median of topic proportion in each Tissue.
 #' @import phyloseq
 #' @import ggplot2
 #' @importFrom dplyr mutate summarize group_by left_join ungroup
@@ -19,15 +19,15 @@ plotTopicProportion <- function(
   spe,
   theta_aligned,
   K,
-  col_names_theta_all = c("iteration", "Sample", "Topic", "topic.dis"),
+  col_names_theta_all = c("iteration", "Tissue", "Topic", "topic.dis"),
   chain = 4,
   warm_up_iter = NULL,
   iter = 2000,
-  SampleID_name = "sample_id"
+  TissueID_name = "tissue_id"
   #design = ~pna
 ){
   
-  Sample <- Topic <- pna <- topic.dis <- NULL
+  Tissue <- Topic <- pna <- topic.dis <- NULL
   median.topic.dis <- median <- NULL
   
   
@@ -39,7 +39,7 @@ plotTopicProportion <- function(
   }
 
 
-  dimnames(theta_aligned)[[2]] <- sort(unique(spe$sample_id))
+  dimnames(theta_aligned)[[2]] <- sort(unique(spe$tissue_id))
   dimnames(theta_aligned)[[3]] <- c(paste0("Topic_", seq(1,K)))
 
 
@@ -54,29 +54,29 @@ plotTopicProportion <- function(
     )
   )
 
-  sam = (colData(spe)[1:9]
+  sam = (colData(spe)[, c(1:9, 54)]
          |> unique()
          |> data.frame()
   )
 
-  theta_all$Sample <- theta_all$Sample |>
+  theta_all$Tissue <- theta_all$Tissue |>
     as.character()
 
   theta_all <- dplyr::left_join(
     theta_all,
     sam,
-    by = c("Sample" = SampleID_name)
+    by = c("Tissue" = TissueID_name)
   )
 
   theta_all$Chain <- factor(theta_all$Chain)
   theta_all$Topic <- factor(theta_all$Topic)
-  theta_all$Sample <- factor(theta_all$Sample)
+  theta_all$Tissue <- factor(theta_all$Tissue)
   #theta_all$pna <- factor(theta_all$pna)
 
 
   theta_summary <- theta_all |>
     dplyr::group_by(
-      Sample,
+      Tissue,
       Topic
       #pna
     ) |>
@@ -95,7 +95,7 @@ plotTopicProportion <- function(
   p <- ggplot2::ggplot(
     theta_summary,
     ggplot2::aes(
-      x= Sample,
+      x= Tissue,
       y = Topic)
   )
   
@@ -105,11 +105,11 @@ plotTopicProportion <- function(
       #ggplot2::aes(alpha = median.topic.dis)
     ) +
     # ggplot2::facet_grid(
-    #   .~Sample,
+    #   .~Tissue,
     #   scale = "free"
     # ) +
     ggplot2::ylab("Topic") + 
-    ggplot2::xlab("Sample") +
+    ggplot2::xlab("Tissue") +
     ggplot2::scale_fill_gradientn(name = "Median Topic \ndistribution",
                                   colors = c("gray98", "#E69F00")) + 
     # ggplot2::scale_fill_gradientn(

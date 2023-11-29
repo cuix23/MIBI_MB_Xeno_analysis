@@ -14,18 +14,18 @@
 
 LDA_analysis <- function(
     spe,
-    SampleID_name = "sample_id",
-    cellType_name = "mm",
+    TissueID_name = "tissue_id",
+    cellType_name = "cluster_id",
     K,
     alpha,
     gamma,
     warm_up_iter = NULL,
-    iter = 2000,
+    iter = 500,
     chain = 2,
-    col_names_theta_all = c("iteration", "Sample", "Topic", "topic.dis"),
+    col_names_theta_all = c("iteration", "Tissue", "Topic", "topic.dis"),
     col_names_beta_hat = c("iterations", "Topic", "Cell.Type", "beta_h"),
     stan_file_path = here::here("Notebooks", "06_LDA_scripts", "06_lda.stan"),
-    cellTypeIndexToPlot = c(1:16),
+    cellTypeIndexToPlot = c(1:33),
     load_file = TRUE,
     save_file = FALSE,
     file_default = TRUE,
@@ -41,20 +41,20 @@ LDA_analysis <- function(
   # Create Doucment-Term matrix
   # return dtm
   
-  #dtm = table(spe$SampleID_name, spe$cellType_name)
+  #dtm = table(spe$TissueID_name, spe$cellType_name)
   dtm = table(
-    colData(spe)[SampleID_name],
+    colData(spe)[TissueID_name],
     colData(spe)[cellType_name]
   )
   
-  # Dimension names of the DTM(sample identity and cell type name)
+  # Dimension names of the DTM(Tissue identity and cell type name)
   dim_names <- dimnames(dtm)
   
   
   
   ################### Posterior Sampling ###################
   # Perform LDA and save results or load LDA results
-  # return samples, a list
+  # return tissues, a list
   
   
   # number of iteration and chains
@@ -71,7 +71,7 @@ LDA_analysis <- function(
   
   # determine file path to save or load LDA posterior rsults
   if (file_default == TRUE) {
-    file_path = file = here::here("Output", "Data",
+    file_path = file = here::here("Output", "RData",
                                   paste0(file_fold), paste0(fileN))
   } else {
     file_path = paste0(file_fold, fileN) # file_fold must end with "/" if file_default = FALSE
@@ -108,7 +108,7 @@ LDA_analysis <- function(
       # must be list object
       iter = iter,
       chains = chain,
-      sample_file = NULL,
+      Tissue_file = NULL,
       diagnostic_file = NULL,
       cores = 4,
       control = list(adapt_delta = 0.9),
@@ -131,7 +131,7 @@ LDA_analysis <- function(
     } # if compute LDA
   
   # extract posterior results
-  samples <- rstan::extract(
+  tissues <- rstan::extract(
     stan.fit,
     permuted = TRUE,
     inc_warmup = FALSE,
@@ -147,7 +147,7 @@ LDA_analysis <- function(
   # return theta and beta
   
   # theta estimation
-  theta <- samples$theta
+  theta <- tissues$theta
   # set dimension names
   dimnames(theta)[[2]] <- dim_names[[1]]
   # dimnames(theta[2]) <- dim_names[1]
@@ -155,7 +155,7 @@ LDA_analysis <- function(
   
   
   # beta estimation
-  beta <- samples$beta
+  beta <- tissues$beta
   # set fimension names
   dimnames(beta)[[2]] <- c(paste0("Topic_", seq(1,K)))
   dimnames(beta)[[3]] <- dim_names[[2]]
@@ -174,7 +174,7 @@ LDA_analysis <- function(
     iterUse = iter / 2
   } else {
     iterUse = iter - warm_up_iter
-  } # number of iterations used in MCMC(subtract warm-up samples) 
+  } # number of iterations used in MCMC(subtract warm-up tissues) 
   cond = 0 # identifier for future if statements
   
   
@@ -183,28 +183,28 @@ LDA_analysis <- function(
   theta_all = reshape2::melt(theta)
   
   colnames(theta_all) = col_names_theta_all
-  #colnames(theta_all) = c("iteration", "Sample", "Topic", "topic.dis")
+  #colnames(theta_all) = c("iteration", "Tissue", "Topic", "topic.dis")
   
   # Perfrom alignment
   if (chain_cond == TRUE) {
     
-    # theta is a 3 dimensional array (iterations * samples * topic)
+    # theta is a 3 dimensional array (iterations * tissues * topic)
     Chain <- Topic <- topic.dis <- NULL
     
     
     # label corresponding chain number
-    theta_all$Chain = paste0("Chain ", rep(seq(1, chain), each = (iterUse)))
+    theta_all$Chain =paste0("Chain ", rep(rep(seq(1, chain), each = iterUse), times = K*length(unique(spe$tissue_id))))
     
     # factor variables
     # theta_all$Topic = factor(theta_all$Topic)
     # theta_all$Chain = factor(theta_all$Chain)
     
     # convert to character for left_join
-    theta_all$Sample = as.character(theta_all$Sample)
+    theta_all$Tissue = as.character(theta_all$Tissue)
     
     # join the SpatialExperimet object column data to theta_all
     ## colData gets the metadata (clinical data)
-    sam = (colData(spe)[1:9]
+    sam = (colData(spe)[, c(1:9, 54)]
            |> unique()
            |> data.frame()
     )
@@ -212,7 +212,7 @@ LDA_analysis <- function(
     theta_all = dplyr::left_join(
       theta_all,
       sam,
-      by = c("Sample"= SampleID_name)
+      by = c("Tissue"= TissueID_name)
     )
     
     # align matrix
@@ -246,7 +246,7 @@ LDA_analysis <- function(
   
   if (cond == 1) {
     
-    # switch samples and Topic dimension in array
+    # switch tissues and Topic dimension in array
     theta <- aperm(theta, c(1,3,2))
     
     theta_chain <- list()
@@ -262,7 +262,7 @@ LDA_analysis <- function(
       theta_aligned <- abind::abind(theta_aligned, theta_chain[[ch]], along = 1)
     } # for loop
     
-    # switch back samples and Topic dimension in array
+    # switch back tissues and Topic dimension in array
     theta_aligned <- aperm(theta_aligned, c(1,3,2))
     
     cond = 2
@@ -300,7 +300,7 @@ LDA_analysis <- function(
   ################### Plot Topic Proportion  ###################
   # plot heatmap of topic distribution
   
-  Sample <- Topic <- topic.dis <- NULL
+  Tissue <- Topic <- topic.dis <- NULL
   median.topic.dis <- median <- NULL
 
   
@@ -312,13 +312,13 @@ LDA_analysis <- function(
   # factor variables
   #theta_long$Chain <- factor(theta_long$Chain)
   theta_long$Topic <- factor(theta_long$Topic)
-  theta_long$Sample <- factor(theta_long$Sample)
+  theta_long$Tissue <- factor(theta_long$Tissue)
   #theta_all$pna <- factor(theta_all$pna)
   
   # summary theta distribution
   theta_summary <- ( theta_long 
     |> dplyr::group_by(
-      Sample,
+      Tissue,
       Topic
       #,pna
     ) 
@@ -341,7 +341,7 @@ LDA_analysis <- function(
   p_topic_prop <- ggplot2::ggplot(
     theta_summary,
     ggplot2::aes(
-      x = Sample,
+      x = Tissue,
       y = Topic)
   )
   
@@ -352,10 +352,10 @@ LDA_analysis <- function(
     ) +
     ggplot2::ylab("Community") +
     # ggplot2::facet_grid(
-    #   .~Sample,
+    #   .~Tissue,
     #   scale = "free"
     # ) +
-    ggplot2::xlab("Sample") +
+    ggplot2::xlab("Tissue") +
     ggplot2::ylab("Community") +
     ggplot2::scale_fill_gradientn(
       name = "Median Community \ndistribution",
@@ -383,7 +383,7 @@ LDA_analysis <- function(
   #   K = K,
   #   chain = 4,
   #   iter = 2000,
-  #   SampleID_name = "sample_id"
+  #   TissueID_name = "Tissue_id"
   # )
   
   
@@ -551,12 +551,12 @@ LDA_analysis <- function(
   x <- dtm
   
   # draws from posterior predictive distribution
-  x_sim <- samples$x_sim[1:iterUse, , ] # iteration * samples * topics
+  x_sim <- tissues$x_sim[1:iterUse, , ] # iteration * tissues * topics
   
   # choose only the first chain
   max_all <- apply(x_sim[1, , ], 2, max)
   
-  # find the maximum of each cell types in each iteration acorss sample 
+  # find the maximum of each cell types in each iteration acorss Tissue 
   for (i in 2:iterUse){
     max_x_sim_i <- apply(
       x_sim[i, ,], 
@@ -628,7 +628,7 @@ LDA_analysis <- function(
     return_list <- list(
       DTM = dtm,
       stan.fit = stan.fit,
-      pos_samples = samples,
+      pos_tissues = tissues,
       theta = theta,
       beta = beta,
       alignment_matrix = aligned,
@@ -646,7 +646,7 @@ LDA_analysis <- function(
     return_list <- list(
       DTM = dtm,
       stan.fit = stan.fit,
-      pos_samples = samples,
+      pos_tissues = tissues,
       theta = theta,
       beta = beta,
       plot_topic_prop = p_topic_prop,

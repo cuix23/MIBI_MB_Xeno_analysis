@@ -6,9 +6,11 @@
 #' @importFrom rstan extract
 #' 
 
+
+
 load_lda_result <- function(file) {
   # load lda file as stan.fit
-  #load(here::here("Output", "Data", "05_LDA_workflow", paste0(file)))
+  #load(here::here("Output", "Data", "04_MB_Xeno_LDA", paste0(fileN)))
   load(file)
   
   # extract 
@@ -19,7 +21,5 @@ load_lda_result <- function(file) {
     include = TRUE
   )
   
-
-  return(list(stan.fit,
-              res))
+  return(res)
 }

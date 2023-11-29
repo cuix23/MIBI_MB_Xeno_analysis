@@ -41,8 +41,8 @@ plotCellTypeDistribution <- function(
   
   
   dimnames(beta_aligned)[[2]] <- c(paste0("Topic_", seq(1,K)))
-  dimnames(beta_aligned)[[3]] <- unique(spe$mm)
-  
+  dimnames(beta_aligned)[[3]] <- unique(spe$cluster_id)
+
   
   beta_hat <- reshape2::melt(beta_aligned) |> as_tibble()
   colnames(beta_hat) <- col_names_beta_hat
