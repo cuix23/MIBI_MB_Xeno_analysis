@@ -14,7 +14,7 @@ modelAssessment <- function(
   #spe,
   dtm,
   #stan.fit = NULL,
-  samples,
+  tissues,
   warm_up_iter = NULL,
   iter = 2000,
   cellTypeIndexToPlot = c(1:16)
@@ -32,7 +32,7 @@ modelAssessment <- function(
   x <- dtm
   
   # draws from posterior predictive distribution
-  x_sim <- samples$x_sim[1:iterUse, , ] # iteration * samples * topics
+  x_sim <- tissues$x_sim[1:iterUse, , ] # iteration * tissues * topics
   
   # choose only the first chain
   max_all <- apply(x_sim[1, , ], 2, max)
