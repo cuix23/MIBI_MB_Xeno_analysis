@@ -32,10 +32,6 @@ library(SpatialExperiment)
 library(here)
 ```
 
-```{r}
-load(file = here("Output","RData","02_SPE", "02_MB_Xeno_spe.rds"))
-spe
-```
 
 # Identifying cluster_id  compartment
 ```{r}
@@ -60,15 +56,15 @@ color_vectors <- list()
 phenotype_col <- setNames(object = c(
   "#6600CC",
   "#CC0066",
-  "#CC0066",
-  "#FF0000",
+  "cornsilk3",
+  "burlywood",
   "#FFFF00",
   "#C65911",
   "#66FF33",
   "#66FF99",
   "#0070C0",
   "#92D050",
-  "#66FFFF",
+  "chocolate2",
   "#2F02BE",
   "purple",
   "brown",
@@ -91,8 +87,7 @@ phenotype_col <- setNames(object = c(
   "purple",
   "brown",
   "green",
-  "grey",
-  "gold"
+  "grey"
   ), unique(spe$cluster_id))
 phenotype_col
 color_vectors$phenotype <- phenotype_col
@@ -272,14 +267,17 @@ plot_spe_sample <- function(sample_id_value) {
 ```
 
 ```{r}
-table(MB_Xeno$sample_id)
+unique(MB_Xeno$sample_id)
+table(MB_Xeno$tissue_id,MB_Xeno$treatment_id)
 ```
 
 ```{r}
-plot_spe_sample("c5m1_AML_Ct_1846_1")
-plot_spe_sample("c5m1_AML_Ct_1846_2")
-plot_spe_sample("c5m1_AML_Ct_1846_3")
-plot_spe_sample("c5m1_AML_Ct_1845_9")
-\
+plot_spe_sample("c5m1_AML_Ct_1845_15")
+plot_spe_sample("c2m1_AML_AraC_D2_1846_11")
+plot_spe_sample("c2m2_AML_AraC_D9_1851_5")
+plot_spe_sample("c5m1_AML_Ct_1844_5")
+plot_spe_sample("c2m1_AML_AraC_D2_1846_5")
+plot_spe_sample("c2m2_AML_AraC_D9_1850_5")
+
 ```
 

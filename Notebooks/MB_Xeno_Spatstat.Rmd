@@ -1,0 +1,77 @@
+---
+title: "MB_Xeno_LDA_Spiat"
+knit: (function(input, encoding) {
+  rmarkdown::render(input = input,
+                    output_dir = here::here(),
+                     knit_root_dir = getwd())})
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document: 
+    toc: yes
+date: "2023-11-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "../")
+#knitr::opts_knit$set(output.dir = "../Output_Documents/")
+options(dplyr.summarise.inform = FALSE)
+```
+
+
+## Library
+```{r library, warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(SpatialExperiment)
+library(spatstat.data)
+library(spatstat.explore)
+library(spatstat.geom)
+library(spatstat.random)
+library(spatstat.sparse)
+library(spatstat.utils)
+
+install.packages("spatstat")
+library(spatstat)
+# library(here)
+```
+
+```{r}
+swedishpines
+swp <-rescale(swedishpines)
+plot(swp)
+DD <- density(swp)
+plot(DD)
+KK <- Kest(swp)
+plot(KK)
+```
+# fit a model to the data
+```{r}
+fitS<-ppm(swp ~ polynom(x,y,2), Strauss(0.9))
+fitS
+```
+We may now conduct a formal statistical test for spatial regularity after accounting for spatial inhomogeneity.
+```{r}
+fitP<- ppm(swp~polynom(x,y,2), Poisson())
+anova(fitP, fitS, test="LR")
+```
+
+```{r}
+class(swedishpines)
+```
+
+```{r}
+DD <- density(swp)
+class(DD)
+KK <- Kest(swp)
+class(KK)
+fitS<-ppm(swp ~ polynom(x,y,2), Strauss(0.9))
+class(fitS)
+```
+```{r}
+help.search("systematic", package="spatstat")
+```
+

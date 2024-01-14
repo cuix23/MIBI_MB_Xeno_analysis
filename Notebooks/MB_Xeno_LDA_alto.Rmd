@@ -23,7 +23,7 @@ options(dplyr.summarise.inform = FALSE)
 
 ## Library
 ```{r library, warning=FALSE, message=FALSE}
-devtools::install_github("lasy/alto")
+# devtools::install_github("lasy/alto")
 
 library(alto)
 library(dplyr)
