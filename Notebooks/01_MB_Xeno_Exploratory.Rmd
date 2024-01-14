@@ -31,8 +31,10 @@ colnames(MB_Xeno)
 # Now, I want to create a new column called tissue_id, which is the unique combination of experience_id and mouse_id. We get 9 unique tissue in total.
 MB_Xeno$tissue_id<- paste(MB_Xeno$mouse_id, MB_Xeno$experiment_id, sep="_")
 dim(MB_Xeno)
-MB_Xeno$tissue_id <- as.factor(as.character(MB_Xeno$tissue_id))
-table(MB_Xeno$tissue_id)
+ MB_Xeno$tissue_id <- as.factor(as.character(MB_Xeno$tissue_id))
+# table(MB_Xeno$tissue_id)
+table(MB_Xeno$experiment_id)
+table(MB_Xeno$condition)
 ```
 generate contingency tables to examine the relationship between the 'tissue_id' and other variables within the 'MB_Xeno' dataset
 ```{r}
@@ -65,12 +67,6 @@ p_tissue
 library(ggplot2)
 library(ggmosaic)
 
-data <- data.frame(
-  Category1 = c("A", "A", "B", "B"),
-  Category2 = c("X", "Y", "X", "Y"),
-  Count = c(10, 20, 30, 40)
-)
-
 MB_Xeno$FOV <- as.factor(as.character(MB_Xeno$FOV))
 # Create the mosaic plot
 ggplot(MB_Xeno, aes(x=tissue_id, fill=FOV)) + 
@@ -78,20 +74,24 @@ ggplot(MB_Xeno, aes(x=tissue_id, fill=FOV)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 25, hjust = 1,size = 8),
         panel.background = element_rect(fill = "white"))+
-  labs(title ="Number of cells in each tissue",x = "tissue_id",y = "Cells Count")
+  labs(x = "tissue_id",y = "Cells Count")
 
-ggplot(MB_Xeno, aes(x=tissue_id, fill=FOV)) + 
+color_set <- c("#66C2A5", "#FF7F00", "#6EAACF", "#A3AC89", "#EC5439", "#41A737", "#3687BC", "#E1917A", "#EE5656",
+               "#B499A5", "#4190AA", "#FE992D","#DCC199", "#6D9E4C", "#929ECA", "#B795C7", "#C09B78", "#F88A8A", "#DC8CC3",
+               "#FDB35B", "#D3A0A2", "#B9C174", "#F5D152", "#B0D84F", "#D68E8E", "#D5D840", "#F9D831",  "#B3B3B3", "#8DD3C7",
+               "#BBE5BE", "#EAF7B6", "#E42123", "#EFEEBC", "#D4D2CC", "#C1B6D3", "#DA9EA9", "#F3867E", 
+               "#D68E8E", "#A4A2B6","#F9D831", "#8EB1C5", "#C2B297", "#F5B368", "#E2C264", "#C4D467", "#A6CEE3","#DDD4B1", 
+               "#FCCDE5", "#EBC87C")
+
+ggplot(MB_Xeno, aes(x = tissue_id, fill = FOV)) + 
   geom_bar() +
+  scale_fill_manual(values = color_set) +  # Replace with your chosen colors
+  guides(fill = FALSE) +  # This removes the legend for fill
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 25, hjust = 1, size = 8),
-        panel.background = element_rect(fill = "white"),
-        legend.text = element_text(size = 7), # Adjust the size of the legend text
-        legend.key.size = unit(0.4, 'cm')) + # Adjust the size of the legend keys
-  labs(title ="Number of cells in each tissue",
-       x = "tissue_id",
-       y = "Cells Count")
-
-
+        panel.background = element_rect(fill = "white")) +
+  labs(x = "tissue id", y = "Cells Count")
+ 
 ```
 
 
@@ -111,49 +111,6 @@ p_tissue
 ```
 
 
-# Tissue 
-```{r}
-# cell numbers of each cluster_id
-Cluster_count_all <- (
-  dplyr:: count(MB_Xeno, cluster_id) 
-  |> dplyr::rename(count = n) 
-  |> dplyr::mutate(cluster_id = forcats::fct_reorder(cluster_id, count))
-  #|> dplyr::arrange(desc(count)) 
-  |> ggplot2::ggplot(aes(x = cluster_id, y = count)) 
-  + geom_bar(stat = "identity", width = 0.7
-             ,fill="#f68060") 
-             #alpha=.6, width=.5)
-  + coord_flip()
-  + xlab("Cluster_id") + ylab("Count")
-  + theme(text = element_text(size = 18)) 
-  + ggtitle("")
-  + theme_bw()
-)
-
-# unique cluster id count in each tissue
-MB_Xeno_clusterId <- MB_Xeno %>% 
-  group_by(tissue_id) %>% 
-  summarise(cell_count = n(),
-            num_unique_cluster = length(unique(cluster_id)))
-MB_Xeno_clusterId
-sd(MB_Xeno_clusterId$num_unique_cluster)
-# Barplot for unique cluster id count in each tissue
-tissue_cluster <- ggplot(MB_Xeno_clusterId, aes(y = tissue_id, x = num_unique_cluster)) + 
-  geom_bar(stat = "identity", fill = "#f68060") + 
-  theme_minimal() +
-  theme(axis.text.y = element_text(angle = 0, hjust = 1,size = 12),
-        panel.background = element_rect(fill = "white"))
-
-# Arrange two plot objects on a page.
-arrange <- ggarrange(
-  Cluster_count_all, tissue_cluster,
-  labels = c("A", "B"),
-  widths = c(2, 1), # Relative widths for the plots. Adjust as needed.
-  heights = c(1.5, 1) # Relative heights for the plots. Adjust as needed.
-) + theme(text = element_text(size = 15))
-arrange
-```
-
 
 #cluster_id count
 ```{r}
@@ -165,10 +122,10 @@ Cluster_count_all <- (
   #|> dplyr::arrange(desc(count)) 
   |> ggplot2::ggplot(aes(x = cluster_id, y = count)) 
   + geom_bar(stat = "identity", width = 0.7
-             ,fill="#f68060") 
+             ,fill="skyblue") 
              #alpha=.6, width=.5)
   + coord_flip()
-  + xlab("Cluster_id") + ylab("Count")
+  + xlab("Cell phenotype") + ylab("Count")
   + theme(text = element_text(size = 18)) 
   + ggtitle("")
   + theme_bw()
@@ -182,7 +139,7 @@ MB_Xeno_clusterId <- MB_Xeno %>%
 MB_Xeno_clusterId
 # Barplot for unique cluster id count in each tissue
 tissue_cluster <- ggplot(MB_Xeno_clusterId, aes(x = tissue_id, y = num_unique_cluster)) + 
-  geom_bar(stat = "identity", fill = "#f68060") + 
+  geom_bar(stat = "identity", fill = "skyblue") + 
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1,size = 8),
         panel.background = element_rect(fill = "white"))
@@ -216,7 +173,7 @@ tissue_heatmap <- function(data_segment){
   
     # labels
     guides(fill=guide_legend(title = "Number of Cells \nin Each Sample"))+
-    labs(x = "Cluster_id", y = "sample_id", title = "Cluster-Sample Distribution for tissue_id")+
+    labs(x = "Cell phenotype", y = "sample id")+
     scale_y_discrete(expand = c(0, 0)) +
     scale_x_discrete(expand = c(0, 0)) +
     
@@ -225,20 +182,20 @@ tissue_heatmap <- function(data_segment){
     scale_fill_manual(values = brewer.pal(11, "RdBu"), na.value = "azure4") + 
   
     # theme
-    theme_grey(base_size = 7)+
+    theme_grey(base_size = 14)+
     theme(legend.position = "right", legend.direction = "vertical",
-        legend.title = element_text(colour = "black", size = 9),
+        legend.title = element_text(colour = "black", size = 11),
         legend.margin = margin(grid::unit(0, "cm")),
-        legend.text = element_text(colour = "grey40", size = 8, face = "bold"),
+        legend.text = element_text(colour = "grey40", size = 11, face = "bold"),
         legend.key.height = grid::unit(0.5, "cm"),
         legend.key.width = grid::unit(0.5, "cm"),
-        axis.text.x = element_text(size = 7, colour = "grey40"),
+        axis.text.x = element_text(size = 8, colour = "grey40"),
         axis.text.y = element_text(size = 8,vjust = 0.2, colour = "grey40"),
         axis.ticks = element_line(linewidth = 0.7),
         plot.background = element_blank(),
         panel.border = element_blank(),
         plot.margin = margin(0.7, 0.4, 0.1, 0.2, "cm"),
-        plot.title = element_text(colour = "grey40", hjust = 0, size = 11, face = "bold")
+        plot.title = element_text(colour = "grey40", hjust = 0, size = 14, face = "bold")
      )+
     #scale_x_discrete(guide = guide_axis(n.dodge = 2)) # separate x label into two levels
     scale_x_discrete(guide = guide_axis(angle = 45))
