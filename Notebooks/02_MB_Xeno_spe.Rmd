@@ -19,7 +19,8 @@ library(SpatialExperiment)
 ```
 
 ```{r}
-MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MB_Xeno/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+MB_Xeno <- read_csv("/Users/cuixinyue/Desktop/MB_Xeno_analysis/Data/MIBI-MB-Xeno-Pilot_scdata_Spatial.csv")
+MB_Xeno$tissue_id<- paste(MB_Xeno$mouse_id, MB_Xeno$experiment_id, sep="_")
 head(MB_Xeno)
 dim(MB_Xeno)
 ```
@@ -32,11 +33,12 @@ dim(MB_Xeno)
 # MB_Xeno_1n2 <-MB_Xeno  %>% 
 #   filter(mouse_id %in% c('c2m1','c5m1'))
 # dim(MB_Xeno_1n2)
+segments <- split(MB_Xeno, MB_Xeno$tissue_id)
 MB_Xeno_c1m1 <- segments$c1m1
 dim(MB_Xeno_c1m1)
-
+colnames(MB_Xeno)
 # extract the require columns(last 70 columns)[from 21 to ]
-MB_Xeno_c1m1_require <- MB_Xeno_c1m1[, 21:90]
+MB_Xeno_c1m1_require <- MB_Xeno_c1m1[, 21:55]
 dim(MB_Xeno_c1m1_require)
 colnames(MB_Xeno_c1m1_require)
 # Transpose 
@@ -50,7 +52,7 @@ all.equal(rownames(test_count_c1m1), colnames(MB_Xeno_c1m1_require))
 ```{r}
 create_countMat <- function(dataset){
   # Extract the last 70 columns from the dataset(21 to 90 columns)
-  dataset <- dataset[, 21:90]
+  dataset <- dataset[, 21:55]
   # De-select metal markers
   # Transpose the matrix to count matrix
   count_matrix <- t(dataset)
@@ -104,14 +106,16 @@ spe <- SpatialExperiment(
   spatialCoordsNames = c("centroidX", "centroidY")
   #spatialCoords = spatialCoords
 )
+assayNames(spe)[1] <- "exprs"
 spe
+unique(spe$tissue_id)
 str(spe$tissue_id)
 str(spe$tissue_id)
 ```
 
 Saving constructed spe object as RDS file.
 ```{r}
-save(spe, file = here::here("02_MB_Xeno_spe.rds"))
+save(spe, file = ("/Users/cuixinyue/Desktop/MB_Xeno_analysis/Output/RData/02_SPE/02_MB_Xeno_spe.rds"))
 ```
 
 #Images and segmentation masks
