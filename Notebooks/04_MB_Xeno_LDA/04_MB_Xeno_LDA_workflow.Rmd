@@ -1,0 +1,475 @@
+---
+title: "04_MB_Xeno_LDA_workflow"
+knit: (function(input, encoding) {
+  rmarkdown::render(input = input,
+                    output_dir = here::here("Output", "HTML"),
+                    knit_root_dir = rprojroot::find_rstudio_root_file())})
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document: 
+    toc: yes
+date: "2023-11-13"
+---
+```{r}
+# Setup path for the root folder
+# here::here("/Users/cuixinyue/Desktop/MB_Xeno_analysis")
+# set_here("/Users/cuixinyue/Desktop/MB_Xeno_analysis")
+# getwd()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_knit$set(root.dir = "../")
+#knitr::opts_knit$set(output.dir = "../Output_Documents/")
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r warning=FALSE, message=FALSE}
+#library(phyloseq)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(stringr)
+#library(genefilter) 
+library(rstan)
+library(randomcoloR)
+library(SpatialExperiment)
+#library(DESeq2)
+library(here)
+``` 
+
+```{r}
+theme_set(theme_minimal())
+theme_update(
+  text = element_text(size = 10),
+  legend.text = element_text(size = 10)
+)
+
+# force not to use scientific notation
+options(scipen=999)
+```
+## Dataset
+Load the MB_Xeno SPE object.
+```{r}
+load(file = here::here("Output","RData","02_SPE","02_MB_Xeno_spe.rds"))
+spe
+```
+## Sample Data
+We want to first apply the Latent Dirichlet Allocation to the sample data with tissue c5m1_AML and tissue c2m1_CB and find topics in their celluar neighbourhood.
+```{r}
+spe_sample <- spe[, spe$tissue_id %in% c("c5m1_AML", "c2m1_CB")]
+spe_sample
+```
+### Document-Term Matrix
+We then want to create the Document-Term matrix with the sample dataset, where the rows are the documents (sample) and the columns are the words(cell-type) and filled with counts.
+```{r}
+# create document-term matrix
+dtm_sample <- as.data.frame.matrix(table(spe_sample$tissue_id, spe_sample$cluster_id)) %>% as.matrix()
+dtm_sample <- as.matrix(table(spe_sample$tissue_id, spe_sample$cluster_id))
+# dtm_sample <- table(spe_sample$tissue_id, spe_sample$cluster_id)
+
+# dimension of document-term matrix
+dim(dtm_sample)
+```
+
+We next to acquire the column names of the sample Document-Term matrix for further usage, and we set the colnames of the matrix to `NULL` as no names should be apply to the LDA function.
+```{r}
+# column names of document-term matrix
+col_names_sample <- colnames(dtm_sample)
+col_names_sample
+
+# setting column names to NULL
+colnames(dtm_sample) <- NULL
+```
+
+```{r}
+# Colour
+# plant_colors <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "purple")
+```
+
+### Input sample data for LDA
+
+Based on the ordination, we choose the number of topics as K=3. We set the hyperparameters $\alpha = 0.8$ and $\gamma = 0.8$. 
+
+```{r}
+K <- 3
+alpha <- 0.8
+gamma <- 0.8
+x <- dtm_sample
+# View(x)
+dimnames(x) <- NULL
+
+# theta[d] ~ dirichlet(alpha), 
+# beta[k] ~ dirichlet(gamma), 
+
+# n is DTM
+stan.data <- list(K = K, 
+  V = ncol(x), 
+  D = nrow(x), 
+  n = x, 
+  alpha = rep(alpha, K), 
+  gamma = rep(gamma, ncol(x))
+)
+```
+
+### Posterior sampling 
+
+We want to estimate the parameters $\theta$ and $B = \left[\beta_{1}, \cdots, \beta_{K} \right]^{T}$, and we estimate using Hamiltonian Monte Carlo(HMC) No-U-Turn-Sampler(NUTS) with one chain and 500 iterations. Out of these 500 iterations, 250 iteration were used as warm-up samples. We uses high-performance computing and save the results with specified file name.
+
+We first want to specify a file name to save the results.
+```{r}
+# number of iteration
+iter <- 500
+# file name
+fileN <- paste0(
+  "JABES_Endo_all_K_",
+  K,
+  "_ite_",
+  iter,
+  "_sample",
+  ".RData"
+  )
+```
+
+By setting the number of chains to one, we apply with the sample dataset.
+```{r posterior-sampling, eval = FALSE}
+#set.seed(4547834)
+set.seed(19991116)
+
+# number of chains
+chains <- 1
+
+# apply dataset
+t1 <- proc.time()
+stan.fit <- stan(
+  file =  here::here("Notebooks", "06_LDA_scripts", "06_lda.stan"),
+  data = stan.data, # must be list object
+  iter = iter, 
+  chains = 1, 
+  sample_file = NULL,
+  diagnostic_file = NULL,
+  cores = 4,
+  control = list(adapt_delta = 0.9),
+  save_dso = TRUE,
+  algorithm = "NUTS")
+proc.time() - t1
+
+save(stan.fit, 
+     file = here::here("Output", "RData", "04_MB_Xeno_LDA", paste0(fileN)))
+```
+We then load the file from the directory and perform further analysis.
+```{r eval=TRUE, include=FALSE}
+load(file = here::here("Output", "RData", "04_MB_Xeno_LDA", paste0(fileN)))
+```
+
+We extract posterior samples from the results.
+```{r extract-ps-sample}
+sample_result <- rstan::extract(
+  stan.fit, 
+  permuted = TRUE, 
+  inc_warmup = FALSE, 
+  include = TRUE
+  )
+```
+
+### Topics analysis
+
+We would like to analyze the results from applying LDA to the sample dataset. Since we are interested in the parameters $\theta$ and $B = \left[\beta_{1}, \cdots, \beta_{K} \right]^{T}$, we want to extract them from the results and check their dimensions. 
+
+
+#### $\theta$
+
+We start with $\theta$. The dimension of $\theta$ is 250 x 2 x 3, where 250 is the number of iteration with 2 tissues and 3 topics. Each value is the probability of each tissue in each topic in each iteration.
+```{r}
+theta_sample <- sample_result$theta
+dim(theta_sample)
+```
+
+We first want to extract tissue "c5m1_AML", and then find the median and mean of probabilities in each topic out of the 250 runs. From both results, we can easily see both methods agree tissue "c5m1_AML" is $98/%$ topic 2 and tissue "c2m1_CB" is $99/%$ topic 1.
+```{r}
+# tissue "c5m1_AML"
+#theta_sample[, 1, ]
+print("--- Tissue 'c5m1_AML'---")
+print("----- Median Probabilities -----")
+apply(data.frame(theta_sample[, 1, ]), 2, median)
+
+print("----- Mean Probabilities -----")
+apply(data.frame(theta_sample[, 1, ]), 2, mean)
+```
+
+```{r}
+# Tissue  "c2m1_CB"
+#theta_sample[, 2, ]
+print("--- tissue 'c2m1_CB' ---")
+print("----- Median Probabilities -----")
+apply(data.frame(theta_sample[, 2, ]), 2, median)
+
+print("----- Mean Probabilities -----")
+apply(data.frame(theta_sample[, 2, ]), 2, mean)
+```
+
+We can also plot the probability distribution for each topic in tissue "c5m1_AML".
+```{r}
+# tissue "c5m1_AML"
+# topic 1
+hist(theta_sample[, 1, 1], xlim = c(0,1),
+     main = "Histogram of Probabilty of Topic 1")
+
+# topic 2
+hist(theta_sample[, 1, 2], xlim = c(0,1),
+     main = "Histogram of Probabilty of Topic 2")
+
+# topic 3
+hist(theta_sample[, 1, 3], xlim = c(0,1),
+     main = "Histogram of Probabilty of Topic 3")
+```
+
+We are now interest what cell types are in each topics, thus we want to preform analysis with $\beta$ estimation. Each value is the probability of each cell type in each topic in each iterations.
+```{r}
+# extract beta estimation
+beta_sample <- sample_result$beta
+
+# set dimension names for cell type column
+dimnames(beta_sample)[3] <- list(col_names_sample)
+dim(beta_sample)
+```
+
+We want to extract tissue "c5m1_AML", and then find the median and mean of the probability of each cell type in each topics.
+
+```{r}
+print("--- Topic 1---")
+print("----- Mean -----")
+apply(data.frame(beta_sample[, 1, ]), 2, mean) %>% sort(decreasing = TRUE)
+print("----- Median -----")
+apply(data.frame(beta_sample[, 1, ]), 2, median) %>% sort(decreasing = TRUE)
+```
+From the above results for Topic 1, we can clearly see both methods agree that mouseniche_cluster_3, engrafted_cluster_4, engrafted_cluster_8 dominate topic 1.
+```{r}
+print("--- Topic 2---")
+print("----- Mean -----")
+apply(data.frame(beta_sample[, 2, ]), 2, mean) %>% sort(decreasing = TRUE)
+print("----- Median -----")
+apply(data.frame(beta_sample[, 2, ]), 2, median) %>% sort(decreasing = TRUE)
+```
+From the above results for Topic 2, we can clearly see both methods agree that mouseniche_cluster_3, mousehem_cluster_6, mousehem_cluster_9  dominate topic 2.
+```{r}
+print("--- Topic 3---")
+print("----- Mean -----")
+apply(data.frame(beta_sample[, 3, ]), 2, mean) %>% sort(decreasing = TRUE)
+print("----- Median -----")
+apply(data.frame(beta_sample[, 3, ]), 2, median) %>% sort(decreasing = TRUE)
+```
+From the above results for Topic 3, the two methods has disagreement in the order and proportion of cell types dominating topic 3, there is no cell type that has a significantly higher proportion.
+
+## Application
+
+We now want to apply the Latent Dirichlet Allocation to the complete dataset with 39 patients to find topics in their celluar neighbourhood.
+```{r}
+# Inspect complete dataset
+spe
+```
+
+### Document-Term Matrix
+
+We first want to create the document-term matrix of the dataset where the rows are the sample identity and columns are the cell types fill with counts. The expected dimension of the DTM is 9 rows by 33 columns.
+
+```{r}
+dtm <- as.data.frame.matrix(table(spe$tissue_id, spe$cluster_id)) %>% as.matrix()
+dtm <- as.matrix(table(spe$tissue_id, spe$cluster_id))
+dim(dtm)
+dim_names <- dimnames(dtm)
+col_names <- colnames(dtm)
+```
+
+```{r}
+get_lda_result <- function(K, alpha, gamma, dtm, iter, chains,filefolder) {
+  # setting seed will align topics
+  # not applying seed, topics will differ but similar probabilities
+  set.seed(19991116)
+  
+  K <- K
+  alpha <- alpha
+  gamma <- gamma
+  x <- dtm
+  # View(x)
+  dimnames(x) <- NULL
+  
+  # theta[d] ~ dirichlet(alpha), alpha pseudo-count for each topic
+  # beta[k] ~ dirichlet(gamma), gamma pseudo-count for each ASV in each topic
+  
+  # n is DTM
+  stan.data <- list(
+    K = K,
+    V = ncol(x),
+    D = nrow(x),
+    n = x,
+    alpha = rep(alpha, K),
+    gamma = rep(gamma, ncol(x))
+  )
+  
+  #number of iteration
+  iter <- iter
+  # file name
+  fileN <- paste0("JABES_Endo_all_K_",
+                  K,
+                  "_ite_",
+                  iter,
+                  ".RData")
+  
+  # number of chains
+  chains <- chains
+  
+  # apply dataset
+  t1 <- proc.time()
+  stan.fit <- stan(
+    file = here::here("Notebooks", "06_LDA_scripts", "06_lda.stan"),
+    data = stan.data,
+    # must be list object
+    iter = iter,
+    chains = chains,
+    sample_file = NULL,
+    diagnostic_file = NULL,
+    cores = 4,
+    control = list(adapt_delta = 0.9),
+    save_dso = TRUE,
+    algorithm = "NUTS"
+  )
+  proc_time <- proc.time() - t1   # processing time
+  # save file with specified name
+  save(stan.fit, 
+       file = here::here("Output", "RData","04_MB_Xeno_LDA", paste0(fileN)))
+  
+  res <- rstan::extract(
+    stan.fit,
+    permuted = TRUE,
+    inc_warmup = FALSE,
+    include = TRUE
+  )
+  
+  return(res)
+}
+```
+
+```{r}
+load_lda_file <- function(file) {
+  # load lda file as stan.fit
+  #load(here::here("Output", "Data", "04_MB_Xeno_LDA", paste0(fileN)))
+  load(file)
+  
+  # extract 
+  res <- rstan::extract(
+    stan.fit,
+    permuted = TRUE,
+    inc_warmup = FALSE,
+    include = TRUE
+  )
+  
+  return(res)
+}
+```
+
+```{r eval=FALSE}
+sample_500 <- get_lda_result(K = 3, alpha = 0.8, gamma = 0.8,
+               dtm = dtm, iter = 500, chains = 1)
+sample_1000 <- get_lda_result(K = 3, alpha = 0.8, gamma = 0.8,
+               dtm = dtm, iter = 1000, chains = 1)
+sample_2000 <- get_lda_result(K = 3, alpha = 0.8, gamma = 0.8,
+               dtm = dtm, iter = 2000, chains = 1)
+```
+
+
+```{r eval=TRUE}
+sample_500  <- load_lda_file(
+  file = here::here("Output", "RData","04_MB_Xeno_LDA","JABES_Endo_all_K_3_ite_500.RData") 
+  )
+sample_1000 <- load_lda_file(
+  file = here::here("Output", "RData","04_MB_Xeno_LDA","JABES_Endo_all_K_3_ite_1000.RData")
+  )
+sample_2000 <- load_lda_file(
+  file = here::here("Output", "RData","04_MB_Xeno_LDA", "JABES_Endo_all_K_3_ite_2000.RData")
+)
+```
+
+### Topics analysis
+
+We would like to analyze the results from applying LDA to the sample dataset. Since we are interested in the parameters $\theta$ and $B = \left[\beta_{1}, \cdots, \beta_{K} \right]^{T}$, we want to extract them from the results and check their dimensions. 
+
+
+#### $\theta$
+
+We start with $\theta$. The dimension of $\theta$ is i x 9 x 3, where i is the number of iteration with 9 tissues and 3 topics. Each value is the probability of each patient in each topic in each iteration.
+
+We want to extract estimated $\theta$ value from each iteration run for different iterations.
+```{r}
+theta_500 <- sample_500$theta
+dim(theta_500)
+theta_1000 <- sample_1000$theta
+dim(theta_1000)
+theta_2000 <- sample_2000$theta
+dim(theta_2000)
+```
+We then want to set sample identity label and topic label to each iteration run, to visualize easier and extract useful information.
+```{r}
+topic_names <- list(paste0("Topic_", 1:3))
+#tissue_names <- list(paste0("Sample_", dim_names[1]))
+tissue_names <- dim_names[1] |> unlist()
+dimnames(theta_500)[3] <- dimnames(theta_1000)[3] <- dimnames(theta_2000)[3] <- topic_names
+dimnames(theta_500)[2] <- dimnames(theta_1000)[2] <- dimnames(theta_2000)[2] <- dim_names[1]
+```
+Since the results are similar from iteration 500, 1000, and 2000. We want to find the median of the topic probabilities of all sample.
+```{r}
+theta_topics <- sapply(1:9,
+  FUN = function(k) {
+    apply(data.frame(theta_2000[, k, ]), 2, median) # |> round(6)
+  }
+) |> t() |> as.data.frame()
+
+rownames(theta_topics) <- tissue_names
+theta_topics$Topic <- colnames(theta_topics)[apply(theta_topics, 1, which.max)]
+#knitr::kable(theta_topics, align = "c")
+formattable::formattable(theta_topics, align = "c")
+```
+
+
+We are now interest what cell types are in each topics, thus we want to preform analysis with $\beta$ estimation. The expected dimension is i x 3 x 33, where $i$ is the number of iteration for 3 topics and 33 cell types. Each value is the probability of each cell type in each topic in each iterations.
+```{r}
+beta_500 <- sample_500$beta
+dim(beta_500)
+beta_1000 <- sample_1000$beta
+dim(beta_1000)
+beta_2000 <- sample_2000$beta
+dim(beta_2000)
+```
+We want to set name of the cell types to the beta estimation to ensure the correctness of our conclusion.
+```{r}
+dimnames(beta_500)[3] <- dimnames(beta_1000)[3] <- dimnames(beta_2000)[3] <- list(col_names)
+```
+
+Since the estimation are similar between 500, 1000, and 2000 times of iteration, we want to use 2000 iterations estimated result. We want to find the median of the estimated results, and sort them with descending order for easier visulization.
+```{r}
+apply(data.frame(beta_500[, 1, ]), 2, mean) %>% sort(decreasing = TRUE)
+
+apply(data.frame(beta_1000[, 1, ]), 2, mean) %>% sort(decreasing = TRUE)
+
+apply(data.frame(beta_2000[, 1, ]), 2, mean) %>% sort(decreasing = TRUE)
+```
+```{r}
+# topic 1
+print("---Topic 1---")
+apply(data.frame(beta_2000[, 1, ]), 2, median) %>% sort(decreasing = TRUE)
+# topic 2
+print("---Topic 2---")
+apply(data.frame(beta_2000[, 2, ]), 2, median) %>% sort(decreasing = TRUE)
+# topic 3
+print("---Topic 3---")
+apply(data.frame(beta_2000[, 3, ]), 2, median) %>% sort(decreasing = TRUE)
+```
+The five cell types with the highest probability in topic 1 is mousehem_cluster_1, mouseniche_cluster_3, mousehem_cluster_6, engrafted_cluster_4, mousehem_cluster_3.
+
+The five cell types with the highest probability in topic 2 is mouseniche_cluster_3, engrafted_cluster_4, engrafted_cluster_8, engrafted_cluster_7, engrafted_cluster_9.
+  
+The five cell types with the highest probability in topic 1 is mouseniche_cluster_3, mousehem_cluster_6, mousehem_cluster_7, mousehem_cluster_9   mousehem_cluster_10.
